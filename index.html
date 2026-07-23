@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>醫療輔助系統</title>
+    <style>
+        * { box-sizing: border-box; font-family: 'Segoe UI', 'Microsoft JhengHei', sans-serif; }
+        body { background-color: #f0f4f8; color: #334155; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+        .container { width: 100%; max-width: 800px; background: white; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); padding: 24px; margin-bottom: 20px; border: 1px solid #e2e8f0; }
+        
+        .header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+        .icon-box { background: #10b981; color: white; border-radius: 8px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; }
+        .header h1 { margin: 0; font-size: 1.4rem; color: #0f172a; }
+        .header p { margin: 2px 0 0 0; font-size: 0.9rem; color: #64748b; }
+
+        .section-title { font-size: 1.1rem; color: #1e293b; margin: 0 0 12px 0; border-bottom: 2px solid #f1f5f9; padding-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+        
+        .label-group { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 6px; }
+        label { font-weight: 600; font-size: 0.95rem; color: #475569; }
+        
+        .category-tabs { display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap; }
+        .tag-btn { cursor: pointer; transition: transform 0.1s; }
+        .tag-btn:active { transform: scale(0.95); }
+        /* 👇 新增：按鈕被選取時的發光效果 */
+        .tag-btn.active { background: #3b82f6 !important; color: white !important; border-color: #2563eb !important; box-shadow: 0 4px 6px rgba(59,130,246,0.3); }
+        
+        textarea { width: 100%; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; font-size: 1rem; resize: none; background: #f8fafc; outline: none; transition: border-color 0.2s, box-shadow 0.2s; line-height: 1.5; color: #334155; overflow: hidden; }
+        textarea:focus { border-color: #3b82f6; background: #fff; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+        
+        .btn-group { display: flex; gap: 12px; margin-top: 12px; justify-content: space-between; flex-wrap: wrap; }
+        button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: none; border-radius: 8px; padding: 10px 20px; font-size: 0.95rem; font-weight: bold; cursor: pointer; transition: all 0.2s; }
+        
+        .btn-mic { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; flex: 1; min-width: 130px; }
+        .btn-mic:hover { background: #d1fae5; }
+        .btn-mic.recording { background: #fee2e2; color: #b91c1c; border-color: #fca5a5; animation: pulse 1.5s infinite; }
+        
+        .btn-analyze { background: #3b82f6; color: white; flex: 1; min-width: 130px; }
+        .btn-analyze:hover { background: #2563eb; }
+        .btn-analyze:disabled { background: #94a3b8; cursor: not-allowed; }
+
+        .btn-copy { background: #f1f5f9; color: #475569; padding: 5px 10px; font-size: 0.85rem; border: 1px solid #e2e8f0; border-radius: 6px; font-weight: normal;}
+        .btn-copy:hover { background: #e2e8f0; color: #0f172a; }
+
+        .category-badge { background: #dcfce7; color: #15803d; padding: 4px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: bold; display: none; border: 1px solid #bbf7d0; box-shadow: 0 2px 4px rgba(0,0,0,0.02);}
+        
+        .loading-mask { display: none; position: absolute; inset: 0; background: rgba(255,255,255,0.8); border-radius: 12px; align-items: center; justify-content: center; flex-direction: column; color: #3b82f6; font-weight: bold; font-size: 1.1rem; z-index: 10; text-align: center; padding: 20px; }
+        .output-box { position: relative; display: flex; flex-direction: column; gap: 16px; margin-top: 10px; }
+
+        .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1e293b; color: white; padding: 10px 20px; border-radius: 8px; font-size: 0.9rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1); opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 1000; text-align: center; }
+
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); } 70% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }
+    </style>
+</head>
+<body>
+
+    <div class="container header">
+        <div class="icon-box">🏥</div>
+        <div>
+            <h1>臨床語音紀錄與分析</h1>
+            <p>阮綜合藥局專用 - 智慧輔助系統</p>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="section-title">
+            <span>📝 病患主訴與臨床紀錄</span>
+        </div>
+        
+        <div id="categoryTabs" class="category-tabs">
+            <span style="font-size: 0.85rem; color: #94a3b8;">載入標籤中...</span>
+        </div>
+
+        <div class="label-group" style="margin-top: 10px; margin-bottom: 8px;">
+            <label style="font-size: 0.85rem; color: #64748b;">✍️ 輸入內容</label>
+            <button onclick="clearClinicalInput()" class="btn-copy" style="color: #dc2626; border-color: #fca5a5; background: #fef2f2;">🗑️ 一鍵清空</button>
+        </div>
+
+        <textarea id="clinicalInput" rows="2" placeholder="請語音或手動輸入..." oninput="autoResize(this)"></textarea>
+        
+        <div class="btn-group">
+            <button id="micBtn" class="btn-mic">🎙️ 語音輸入</button>
+            <button id="cameraBtn" class="btn-mic" style="background: #f8fafc; color: #475569; border-color: #cbd5e1;">📷 處方/截圖辨識</button>
+            <input type="file" id="imageInput" accept="image/*" style="display: none;">
+            
+            <button id="micromedexBtn" class="btn-mic" style="background: #e0e7ff; color: #4338ca; border-color: #c7d2fe;">🔗 查 Micromedex</button>
+            
+            <button id="analyzeBtn" class="btn-analyze">✨ 送出分析</button>
+        </div>
+    </div>
+
+    <div class="container relative">
+        <div class="section-title">
+            <span>📋 HIS 系統格式產出</span>
+            <span id="categoryBadge" class="category-badge">🏷️ 尚未分類</span>
+        </div>
+        
+        <div class="output-box">
+            <div id="loadingMask" class="loading-mask">
+                ⏳ 醫療大腦運算中，請稍候...
+            </div>
+
+            <div>
+                <div class="label-group">
+                    <label>問題敘述</label>
+                    <button onclick="copyContent('problemOutput', this)" class="btn-copy">📋 複製問題</button>
+                </div>
+                <textarea id="problemOutput" rows="1" readonly placeholder="AI 分析後的問題將顯示於此..."></textarea>
+            </div>
+
+            <div>
+                <div class="label-group">
+                    <label>回覆內容</label>
+                    <button onclick="copyContent('replyOutput', this)" class="btn-copy">📋 複製回覆</button>
+                </div>
+                <textarea id="replyOutput" rows="1" readonly placeholder="AI 分析後的回覆將顯示於此..."></textarea>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast">訊息提示</div>
+
+    <script>
+        // 🔴 【最重要的一步】：請將下方引號內的網址，換成您 GAS 部署為「網頁應用程式」後的 URL！
+        // 網址格式應該長得像： https://script.google.com/macros/s/AKfycby.../exec
+        const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyKk3pHaXniCbPuKcQNJBSlKQO16lcva3MGmY8C9JoTbcf9zZ0ULRl2o-s1tsW3kVtO/exec'; 
+
+        const clinicalInput = document.getElementById('clinicalInput');
+        const problemOutput = document.getElementById('problemOutput');
+        const replyOutput = document.getElementById('replyOutput');
+        const categoryTabs = document.getElementById('categoryTabs');
+        const micBtn = document.getElementById('micBtn');
+        const cameraBtn = document.getElementById('cameraBtn');
+        const imageInput = document.getElementById('imageInput');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const loadingMask = document.getElementById('loadingMask');
+        const categoryBadge = document.getElementById('categoryBadge');
+        const toast = document.getElementById('toast');
+
+        window.autoResize = function(el) {
+            el.style.height = 'auto';
+            el.style.height = el.scrollHeight + 'px';
+        };
+
+        const selectedTags = new Set();
+
+        // 👉 改寫 1：網頁載入時取得標籤 (使用 fetch 發送 GET 請求)
+        window.onload = () => {
+            fetch(GAS_WEB_APP_URL + '?action=getInitialData')
+                .then(response => response.json())
+                .then(data => {
+                    categoryTabs.innerHTML = '';
+                    const colorPalettes = [
+                        { bg: '#e0f2fe', color: '#0369a1', border: '#bae6fd', icon: '💊' },
+                        { bg: '#fef3c7', color: '#92400e', border: '#fde68a', icon: '🔄' },
+                        { bg: '#fee2e2', color: '#991b1b', border: '#fecaca', icon: '⚠️' },
+                        { bg: '#ede9fe', color: '#5b21b6', border: '#ddd6fe', icon: '📉' },
+                        { bg: '#dcfce7', color: '#15803d', border: '#bbf7d0', icon: '📌' }
+                    ];
+
+                    data.tags.forEach((tag, index) => {
+                        const style = colorPalettes[index % colorPalettes.length];
+                        const btn = document.createElement('button');
+                        btn.className = 'tag-btn';
+                        btn.style.cssText = `background: ${style.bg}; color: ${style.color}; border: 1px solid ${style.border}; padding: 6px 12px; font-size: 0.85rem; border-radius: 20px;`;
+                        btn.innerHTML = `${style.icon} ${tag}`;
+                        
+                        btn.onclick = function() {
+                            if (this.classList.contains('active')) {
+                                this.classList.remove('active');
+                                selectedTags.delete(tag); 
+                            } else {
+                                this.classList.add('active');
+                                selectedTags.add(tag); 
+                            }
+                        };
+                        categoryTabs.appendChild(btn);
+                    });
+                })
+                .catch(error => {
+                    categoryTabs.innerHTML = '<span style="color:red; font-size:0.85rem;">⚠️ 無法載入標籤，請檢查 GAS 網址是否正確</span>';
+                });
+        };
+
+        function showToast(msg) {
+            toast.textContent = msg;
+            toast.style.opacity = '1';
+            setTimeout(() => toast.style.opacity = '0', 3000);
+        }
+
+        window.copyContent = function(elementId, btn) {
+            const el = document.getElementById(elementId);
+            if (!el.value) return showToast('⚠️ 內容為空');
+            el.select();
+            document.execCommand('copy');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '✅ 已複製';
+            showToast('✅ 成功複製到剪貼簿');
+            window.getSelection().removeAllRanges();
+            setTimeout(() => btn.innerHTML = originalText, 2000);
+        };
+
+        window.clearClinicalInput = function() {
+            clinicalInput.value = ''; 
+            autoResize(clinicalInput); 
+            document.querySelectorAll('.tag-btn.active').forEach(btn => btn.classList.remove('active'));
+            if (typeof selectedTags !== 'undefined') selectedTags.clear();
+            showToast('🗑️ 內容與標籤已全數重置'); 
+            clinicalInput.focus(); 
+        };
+
+        // 👉 改寫 2：送出 AI 分析 (使用 fetch 發送 POST 請求)
+        analyzeBtn.addEventListener('click', () => {
+            const inputText = clinicalInput.value.trim();
+            const tagsArray = Array.from(selectedTags);
+            
+            if (!inputText && tagsArray.length === 0) return showToast('⚠️ 請輸入主訴或選擇上方標籤');
+
+            let payloadText = inputText;
+            if (tagsArray.length > 0) {
+                payloadText = `[病患詢問重點：${tagsArray.join(', ')}]\n` + inputText;
+            }
+
+            loadingMask.style.display = 'flex';
+            analyzeBtn.disabled = true;
+            analyzeBtn.innerHTML = '⏳ 處理中...';
+
+            fetch(GAS_WEB_APP_URL, {
+                method: 'POST',
+                // 因為要跨網域請求，需要特別設定 body 格式
+                body: JSON.stringify({
+                    action: 'callGemini',
+                    payload: payloadText
+                })
+            })
+            .then(response => response.text()) // 後端回傳的是字串
+            .then(jsonString => {
+                try {
+                    const data = JSON.parse(jsonString);
+                    if (data.error) {
+                        showToast('❌ ' + data.error);
+                    } else {
+                        categoryBadge.innerHTML = '🏷️ ' + (data.category || '未分類');
+                        categoryBadge.style.display = 'inline-block';
+                        
+                        problemOutput.value = typeof data.problem === 'object' ? JSON.stringify(data.problem, null, 2) : (data.problem || '');
+
+                        if (typeof data.reply === 'object') {
+                            if (Array.isArray(data.reply)) {
+                                replyOutput.value = data.reply.map(item => typeof item === 'object' ? JSON.stringify(item) : item).join('\n');
+                            } else {
+                                replyOutput.value = JSON.stringify(data.reply, null, 2);
+                            }
+                        } else {
+                            replyOutput.value = data.reply || '';
+                        }
+                        
+                        autoResize(problemOutput);
+                        autoResize(replyOutput);
+                        showToast('✅ 分析完成，可點擊複製貼回 HIS');
+                    }
+                } catch (e) {
+                    showToast('❌ 資料解析失敗，回傳格式異常');
+                }
+            })
+            .catch(error => showToast('❌ 網路連接失敗'))
+            .finally(() => {
+                loadingMask.style.display = 'none';
+                analyzeBtn.disabled = false;
+                analyzeBtn.innerHTML = '✨ 送出分析';
+            });
+        });
+
+        // ==========================================
+        // 🎙️ 語音辨識邏輯 (這部分完全不需要動，因為它本來就在瀏覽器端運作)
+        // ==========================================
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition = null;
+        let isRecording = false;
+        let currentText = ""; 
+
+        if (SpeechRecognition) {
+            recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = true; 
+            recognition.lang = 'zh-TW';
+
+            recognition.onstart = () => {
+                isRecording = true;
+                currentText = clinicalInput.value; 
+                if (currentText && !currentText.endsWith('\n')) currentText += '\n'; 
+                
+                micBtn.classList.add('recording');
+                micBtn.innerHTML = '🛑 錄音中 (再按一次停止)';
+                showToast('🎙️ 開始收音，請說話...');
+            };
+
+            recognition.onresult = (e) => {
+                let final = '', interim = '';
+                for (let i = e.resultIndex; i < e.results.length; ++i) {
+                    if (e.results[i].isFinal) final += e.results[i][0].transcript;
+                    else interim += e.results[i][0].transcript;
+                }
+                clinicalInput.value = currentText + final + interim;
+                autoResize(clinicalInput);
+                if (final) currentText += final; 
+            };
+
+            recognition.onerror = (e) => {
+                if (e.error === 'not-allowed') showToast('❌ 麥克風權限被封鎖，請允許網頁存取');
+                else if (e.error === 'no-speech') showToast('⚠️ 沒聽到聲音自動停止');
+                stopRec(false); 
+            };
+            
+            recognition.onend = () => { if(isRecording) stopRec(true); };
+        }
+
+        function stopRec(autoSubmit = true) {
+            if (!isRecording) return;
+            isRecording = false;
+            recognition.stop(); 
+            
+            micBtn.classList.remove('recording');
+            micBtn.innerHTML = '🎙️ 語音輸入';
+            
+            if (autoSubmit && clinicalInput.value.trim() !== '') {
+                showToast('✅ 錄音結束，正在自動送出分析...');
+                analyzeBtn.click(); 
+            }
+        }
+
+        micBtn.addEventListener('click', () => {
+            if (!recognition) return showToast('❌ 您的瀏覽器不支援網頁語音，請使用 Chrome 或 Edge');
+            if (isRecording) { stopRec(true); } 
+            else {
+                micBtn.innerHTML = '⏳ 啟動中...'; 
+                try { recognition.start(); } 
+                catch(err) { stopRec(false); showToast('❌ 啟動麥克風失敗，請重整網頁'); }
+            }
+        });
+
+        // 👉 改寫 3：處方拍照辨識 (使用 fetch 發送 POST 請求)
+        cameraBtn.addEventListener('click', () => { imageInput.click(); });
+        imageInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            loadingMask.style.display = 'flex';
+            loadingMask.innerHTML = '🔍 正在辨識處方藥品...';
+            cameraBtn.disabled = true;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    const MAX_WIDTH = 800;
+                    let width = img.width, height = img.height;
+                    if (width > MAX_WIDTH) { height = Math.round((height * MAX_WIDTH) / width); width = MAX_WIDTH; }
+                    canvas.width = width; canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    const base64String = canvas.toDataURL('image/jpeg', 0.8);
+
+                    fetch(GAS_WEB_APP_URL, {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            action: 'processImage',
+                            payload: base64String
+                        })
+                    })
+                    .then(response => response.text())
+                    .then(result => {
+                        try {
+                            const data = JSON.parse(result);
+                            if (data.error) throw new Error(data.error);
+                        } catch (error) {
+                            clinicalInput.value = (clinicalInput.value ? clinicalInput.value + '\n\n' : '') + '[系統辨識處方]：\n' + result;
+                            autoResize(clinicalInput);
+                            showToast('✅ 處方辨識完成');
+                        }
+                    })
+                    .catch(error => showToast('❌ 辨識失敗'))
+                    .finally(() => resetCameraUI());
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        function resetCameraUI() {
+            loadingMask.style.display = 'none';
+            loadingMask.innerHTML = '⏳ 醫療大腦運算中，請稍候...'; 
+            cameraBtn.disabled = false;
+            imageInput.value = ''; 
+        }
+
+        document.getElementById('micromedexBtn').addEventListener('click', () => {
+            const micromedexUrl = 'https://www.micromedexsolutions.com/micromedex2/librarian/PFActionId/evidencexpert.FindDrugInteractions?navitem=topInteractions&isToolPage=true#/drugInteractionSearch'; 
+            window.open(micromedexUrl, '_blank');
+            showToast('🔗 已開啟 Micromedex，請參考上方清單輸入藥名');
+        });
+    </script>
+</body>
+</html>
