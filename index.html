@@ -476,19 +476,22 @@
     
     <script>
         // ==========================================
-        // 🔄 手機/電腦 同步核心邏輯
+        // 🔄 手機/電腦 同步核心邏輯 (升級版自動配對)
         // ==========================================
         let syncInterval = null;
+        let isPhoneConnected = false; // 紀錄連線狀態
         const urlParams = new URLSearchParams(window.location.search);
         const urlRoomId = urlParams.get('roomId');
     
         // 👉 狀況 A：如果網址有 roomId，代表現在是用「手機」打開的！
         if (urlRoomId) {
-            // 替換為手機版專屬的 UI，加入「拍照/截圖」按鈕
+            // 替換為手機版專屬的 UI，加入連線狀態提示
             document.body.innerHTML = `
                 <div class="mobile-remote">
-                    <h1 style="font-size: 1.5rem; margin-bottom: 10px;">📱 萬能遙控器</h1>
-                    <p style="color: #64748b; margin-bottom: 20px;">可語音輸入，或直接拍照辨識處方傳至電腦</p>
+                    <h1 style="font-size: 1.5rem; margin-bottom: 5px;">📱 萬能遙控器</h1>
+                    <div style="background: #dcfce7; color: #15803d; padding: 6px 16px; border-radius: 20px; font-weight: bold; font-size: 0.95rem; margin-bottom: 20px; border: 1px solid #bbf7d0; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                        🟢 成功與工作車連線中
+                    </div>
                     
                     <div style="display: flex; gap: 10px; width: 100%; margin-bottom: 15px;">
                         <button id="remoteCameraBtn" style="flex: 1; padding: 12px; background: #3b82f6; color: white; border: none; border-radius: 8px; font-weight: bold; font-size: 1.1rem; box-shadow: 0 4px 6px rgba(59,130,246,0.3);">📷 拍處方 / 傳截圖</button>
@@ -502,14 +505,18 @@
                 </div>
             `;
     
+            // 📱 【新增】：手機一開啟網頁，立刻發送隱形配對信號給電腦！
+            fetch(GAS_WEB_APP_URL, {
+                method: 'POST',
+                body: JSON.stringify({ action: 'syncSend', roomId: urlRoomId, payload: '__CONNECTED__' })
+            });
+    
             const remoteCameraBtn = document.getElementById('remoteCameraBtn');
             const remoteImageInput = document.getElementById('remoteImageInput');
             const remoteInput = document.getElementById('remoteInput');
     
-            // 綁定拍照按鈕
             remoteCameraBtn.addEventListener('click', () => { remoteImageInput.click(); });
             
-            // 處理照片選擇與壓縮上傳
             remoteImageInput.addEventListener('change', function(e) {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -522,7 +529,6 @@
                 reader.onload = function(event) {
                     const img = new Image();
                     img.onload = function() {
-                        // 使用 Canvas 壓縮圖片以加快傳輸
                         const canvas = document.createElement('canvas');
                         const MAX_WIDTH = 800;
                         let width = img.width, height = img.height;
@@ -532,7 +538,6 @@
                         ctx.drawImage(img, 0, 0, width, height);
                         const base64String = canvas.toDataURL('image/jpeg', 0.8);
     
-                        // 呼叫後端 (Google Drive OCR + 70B 模型)
                         fetch(GAS_WEB_APP_URL, {
                             method: 'POST',
                             body: JSON.stringify({ action: 'processImage', payload: base64String })
@@ -546,7 +551,6 @@
                                 finalText = data.text || result;
                             } catch (error) {}
                             
-                            // 將辨識結果填入手機輸入框
                             remoteInput.value = (remoteInput.value ? remoteInput.value + '\n\n' : '') + '[處方/截圖辨識結果]：\n' + finalText;
                             
                             remoteCameraBtn.innerHTML = '✅ 辨識完成！';
@@ -569,7 +573,6 @@
                 reader.readAsDataURL(file);
             });
     
-            // 傳送到電腦的邏輯
             window.sendToPc = function() {
                 const text = remoteInput.value.trim();
                 if (!text) return;
@@ -588,20 +591,23 @@
                     setTimeout(() => status.style.display = 'none', 3000);
                 });
             };
-        }
+        } 
         // 👉 狀況 B：一般電腦端網頁
         else {
             document.getElementById('mobileSyncBtn').addEventListener('click', () => {
-                // 隨機產生一個 6 碼的專屬房間密碼
+                // 如果已經在連線中，點擊就是斷開連線
+                if (isPhoneConnected) {
+                    stopSync();
+                    return;
+                }
+    
                 const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
                 const currentUrl = window.location.href.split('?')[0];
                 const syncUrl = `${currentUrl}?roomId=${roomId}`;
                 
-                // 呼叫免費 QR Code API 產生圖片
                 document.getElementById('qrImage').src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(syncUrl)}`;
                 document.getElementById('qrModal').style.display = 'flex';
                 
-                // 開始每 2 秒去後端看有沒有手機傳來的字
                 syncInterval = setInterval(() => {
                     fetch(GAS_WEB_APP_URL, {
                         method: 'POST',
@@ -610,10 +616,27 @@
                     .then(res => res.json())
                     .then(data => {
                         if (data.text) {
-                            const inputEl = document.getElementById('clinicalInput');
-                            inputEl.value = (inputEl.value ? inputEl.value + '\n' : '') + data.text;
-                            autoResize(inputEl);
-                            showToast('📱 接收到手機語音輸入');
+                            // 💻 【新增】：攔截配對信號！
+                            if (data.text === '__CONNECTED__') {
+                                document.getElementById('qrModal').style.display = 'none'; // 自動關閉 QR Code
+                                isPhoneConnected = true;
+                                
+                                // 變更按鈕外觀為「已連線狀態」
+                                const syncBtn = document.getElementById('mobileSyncBtn');
+                                syncBtn.innerHTML = '🟢 手機已連線 (點此斷開)';
+                                syncBtn.style.background = '#dcfce7';
+                                syncBtn.style.color = '#15803d';
+                                syncBtn.style.borderColor = '#bbf7d0';
+                                
+                                showToast('📱 手機配對成功！您現在可以看到電腦螢幕了');
+                            } 
+                            // 收到正常的文字資料
+                            else {
+                                const inputEl = document.getElementById('clinicalInput');
+                                inputEl.value = (inputEl.value ? inputEl.value + '\n' : '') + data.text;
+                                autoResize(inputEl);
+                                showToast('📥 已接收到手機傳送的資料');
+                            }
                         }
                     }).catch(e => console.log('同步檢查失敗'));
                 }, 2000);
@@ -621,8 +644,17 @@
     
             window.stopSync = function() {
                 document.getElementById('qrModal').style.display = 'none';
-                if (syncInterval) clearInterval(syncInterval); // 停止檢查，徹底斷開連線
-                showToast('🔌 已關閉手機同步連線');
+                if (syncInterval) clearInterval(syncInterval); 
+                isPhoneConnected = false;
+                
+                // 恢復按鈕原本的外觀
+                const syncBtn = document.getElementById('mobileSyncBtn');
+                syncBtn.innerHTML = '📱 手機掃碼語音';
+                syncBtn.style.background = '#fef3c7';
+                syncBtn.style.color = '#b45309';
+                syncBtn.style.borderColor = '#fde68a';
+                
+                showToast('🔌 已斷開手機連線');
             };
         }
     </script>
