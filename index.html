@@ -237,17 +237,24 @@
                         categoryBadge.innerHTML = '🏷️ ' + (data.category || '未分類');
                         categoryBadge.style.display = 'inline-block';
                         
-                        problemOutput.value = typeof data.problem === 'object' ? JSON.stringify(data.problem, null, 2) : (data.problem || '');
-
+                        // 處理問題敘述，並強制轉換字面上的 \n 為真實換行
+                        let processedProblem = typeof data.problem === 'object' ? JSON.stringify(data.problem, null, 2) : (data.problem || '');
+                        problemOutput.value = processedProblem.replace(/\\n/g, '\n');
+                        
+                        // 處理回覆內容
+                        let processedReply = '';
                         if (typeof data.reply === 'object') {
                             if (Array.isArray(data.reply)) {
-                                replyOutput.value = data.reply.map(item => typeof item === 'object' ? JSON.stringify(item) : item).join('\n');
+                                processedReply = data.reply.map(item => typeof item === 'object' ? JSON.stringify(item) : item).join('\n');
                             } else {
-                                replyOutput.value = JSON.stringify(data.reply, null, 2);
+                                processedReply = JSON.stringify(data.reply, null, 2);
                             }
                         } else {
-                            replyOutput.value = data.reply || '';
+                            processedReply = data.reply || '';
                         }
+                        
+                        // 🔧 【修正換行 Bug】：強制將字面上的 "\n" 替換成真正的換行符號
+                        replyOutput.value = processedReply.replace(/\\n/g, '\n');
                         
                         autoResize(problemOutput);
                         autoResize(replyOutput);
