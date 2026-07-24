@@ -491,7 +491,7 @@
         <h2 style="color: #0f172a; margin-bottom: 5px;">📱 手機語音遙控器</h2>
         <p style="color: #64748b; margin-top: 0;">請用手機相機掃描下方條碼</p>
         <img id="qrImage" src="" alt="QR Code">
-        <p style="color: #ef4444; font-weight: bold;">連線中... 掃描後請直接在手機上輸入</p>
+        <p style="color: #ef4444; font-weight: bold;">配對中... 掃描後請直接在手機上輸入</p>
         <button onclick="stopSync()" class="btn-copy" style="padding: 10px 20px; font-size: 1rem;">❌ 關閉並停止同步</button>
     </div>
     
@@ -512,7 +512,7 @@
                 <div class="mobile-remote">
                     <h1 style="font-size: 1.5rem; margin-bottom: 5px;">📱 萬能遙控器</h1>
                     <div style="background: #dcfce7; color: #15803d; padding: 6px 16px; border-radius: 20px; font-weight: bold; font-size: 0.95rem; margin-bottom: 15px; border: 1px solid #bbf7d0; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
-                        🟢 成功與工作車連線中
+                        🟢 成功與電腦端配對中
                     </div>
                     
                     <div style="display: flex; gap: 6px; width: 100%; margin-bottom: 15px;">
@@ -528,13 +528,13 @@
                     
                     <button onclick="sendToPc()" id="remoteSendBtn" style="width: 100%; padding: 15px; margin-top: 20px; background: #10b981; color: white; border: none; border-radius: 8px; font-size: 1.2rem; font-weight: bold; box-shadow: 0 4px 6px rgba(16,185,129,0.3);">🚀 將文字傳送到電腦</button>
                     
-                    <button onclick="disconnectFromPhone()" style="width: 100%; padding: 12px; margin-top: 15px; background: #fee2e2; color: #b91c1c; border: none; border-radius: 8px; font-size: 1.1rem; font-weight: bold;">❌ 結束連線</button>
+                    <button onclick="disconnectFromPhone()" style="width: 100%; padding: 12px; margin-top: 15px; background: #fee2e2; color: #b91c1c; border: none; border-radius: 8px; font-size: 1.1rem; font-weight: bold;">❌ 結束配對</button>
                     
                     <p id="remoteStatus" style="margin-top: 15px; color: #059669; font-weight: bold; display: none;">✅ 已成功傳送到電腦畫面！</p>
                 </div>
             `;
 
-            // 📱 初始化連線並發送首次解鎖信號
+            // 📱 初始化配對並發送首次解鎖信號
             fetch(GAS_WEB_APP_URL, {
                 method: 'POST',
                 body: JSON.stringify({ action: 'syncSend', roomId: urlRoomId, payload: '__CONNECTED__' })
@@ -580,7 +580,7 @@
                 document.body.innerHTML = `
                     <div class="mobile-remote" style="justify-content: center;">
                         <h1 style="font-size: 2rem; margin-bottom: 10px;">🔌 已斷線</h1>
-                        <p style="color: #64748b; font-size: 1.2rem;">與工作車的連線已中斷，您可以關閉此網頁。</p>
+                        <p style="color: #64748b; font-size: 1.2rem;">與電腦端的配對已中斷，您可以關閉此網頁。</p>
                     </div>
                 `;
             }
@@ -777,7 +777,7 @@
                                 lastActiveTime = Date.now(); 
                                 
                                 const syncBtn = document.getElementById('mobileSyncBtn');
-                                syncBtn.innerHTML = '🟢 手機已連線';
+                                syncBtn.innerHTML = '🟢 手機已配對(按此結束配對)';
                                 syncBtn.style.background = '#dcfce7';
                                 syncBtn.style.color = '#15803d';
                                 syncBtn.style.borderColor = '#bbf7d0';
@@ -785,7 +785,7 @@
                                 showToast('📱 手機配對成功！');
                             } 
                             else if (data.text === '__DISCONNECT__') {
-                                showToast('📱 手機端已主動結束連線');
+                                showToast('📱 手機端已主動結束配對');
                                 stopSync(true); 
                             }
                             else {
@@ -816,7 +816,7 @@
                         }).catch(e => {});
 
                         if (Date.now() - lastActiveTime > 7000) {
-                            showToast('⚠️ 偵測到手機連線中斷');
+                            showToast('⚠️ 偵測到手機配對中斷');
                             stopSync(true); 
                         }
                     }
@@ -842,12 +842,12 @@
                 }
                 
                 const syncBtn = document.getElementById('mobileSyncBtn');
-                syncBtn.innerHTML = '📱 手機掃碼';
+                syncBtn.innerHTML = '📱 手機配對';
                 syncBtn.style.background = '#fef3c7';
                 syncBtn.style.color = '#b45309';
                 syncBtn.style.borderColor = '#fde68a';
                 
-                if (!isRemote) showToast('🔌 已從電腦端斷開手機連線');
+                if (!isRemote) showToast('🔌 已從電腦端斷開手機配對');
             };
         }
     </script>
