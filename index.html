@@ -27,14 +27,14 @@
         textarea { width: 100%; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; font-size: 1rem; resize: none; background: #f8fafc; outline: none; transition: border-color 0.2s, box-shadow 0.2s; line-height: 1.5; color: #334155; overflow: hidden; }
         textarea:focus { border-color: #3b82f6; background: #fff; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
         
-        .btn-group { display: flex; gap: 12px; margin-top: 12px; justify-content: space-between; flex-wrap: wrap; }
-        button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: none; border-radius: 8px; padding: 10px 20px; font-size: 0.95rem; font-weight: bold; cursor: pointer; transition: all 0.2s; }
+        .btn-group { display: flex; gap: 8px; margin-top: 12px; justify-content: space-between; flex-wrap: wrap; }
+        button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: none; border-radius: 8px; padding: 10px 14px; font-size: 0.9rem; font-weight: bold; cursor: pointer; transition: all 0.2s; }
         
-        .btn-mic { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; flex: 1; min-width: 130px; }
+        .btn-mic { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; flex: 1; min-width: 110px; }
         .btn-mic:hover { background: #d1fae5; }
         .btn-mic.recording { background: #fee2e2; color: #b91c1c; border-color: #fca5a5; animation: pulse 1.5s infinite; }
         
-        .btn-analyze { background: #3b82f6; color: white; flex: 1; min-width: 130px; }
+        .btn-analyze { background: #3b82f6; color: white; flex: 1; min-width: 110px; }
         .btn-analyze:hover { background: #2563eb; }
         .btn-analyze:disabled { background: #94a3b8; cursor: not-allowed; }
 
@@ -82,13 +82,16 @@
         <textarea id="clinicalInput" rows="2" placeholder="請語音或手動輸入..." oninput="autoResize(this)"></textarea>
         
         <div class="btn-group">
-            <button id="mobileSyncBtn" class="btn-mic" style="background: #fef3c7; color: #b45309; border-color: #fde68a;">📱 手機掃碼語音</button>
+            <button id="mobileSyncBtn" class="btn-mic" style="background: #fef3c7; color: #b45309; border-color: #fde68a;">📱 手機掃碼</button>
             <button id="micBtn" class="btn-mic">🎙️ 語音輸入</button>
-            <button id="cameraBtn" class="btn-mic" style="background: #f8fafc; color: #475569; border-color: #cbd5e1;">📷 上傳處方 (支援貼上)</button>
-            <input type="file" id="imageInput" accept="image/*" style="display: none;">
+            <button id="pcCameraBtn" class="btn-mic" style="background: #3b82f6; color: white; border-color: #2563eb;">📷 拍照</button>
+            <button id="pcGalleryBtn" class="btn-mic" style="background: #6366f1; color: white; border-color: #4f46e5;">🖼️ 相簿</button>
             
-            <button id="micromedexBtn" class="btn-mic" style="background: #e0e7ff; color: #4338ca; border-color: #c7d2fe;">🔗 查 Micromedex</button>
+            <!-- 隱藏的檔案上傳 inputs -->
+            <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display: none;">
+            <input type="file" id="galleryInput" accept="image/*" style="display: none;">
             
+            <button id="micromedexBtn" class="btn-mic" style="background: #e0e7ff; color: #4338ca; border-color: #c7d2fe;">🔗 Micromedex</button>
             <button id="analyzeBtn" class="btn-analyze">✨ 送出分析</button>
         </div>
     </div>
@@ -132,8 +135,10 @@
         const replyOutput = document.getElementById('replyOutput');
         const categoryTabs = document.getElementById('categoryTabs');
         const micBtn = document.getElementById('micBtn');
-        const cameraBtn = document.getElementById('cameraBtn');
-        const imageInput = document.getElementById('imageInput');
+        const pcCameraBtn = document.getElementById('pcCameraBtn');
+        const pcGalleryBtn = document.getElementById('pcGalleryBtn');
+        const cameraInput = document.getElementById('cameraInput');
+        const galleryInput = document.getElementById('galleryInput');
         const analyzeBtn = document.getElementById('analyzeBtn');
         const loadingMask = document.getElementById('loadingMask');
         const categoryBadge = document.getElementById('categoryBadge');
@@ -242,11 +247,9 @@
                         categoryBadge.innerHTML = '🏷️ ' + (data.category || '未分類');
                         categoryBadge.style.display = 'inline-block';
                         
-                        // 處理問題敘述，並強制轉換字面上的 \n 為真實換行
                         let processedProblem = typeof data.problem === 'object' ? JSON.stringify(data.problem, null, 2) : (data.problem || '');
                         problemOutput.value = processedProblem.replace(/\\n/g, '\n');
                         
-                        // 處理回覆內容
                         let processedReply = '';
                         if (typeof data.reply === 'object') {
                             if (Array.isArray(data.reply)) {
@@ -258,7 +261,6 @@
                             processedReply = data.reply || '';
                         }
                         
-                        // 🔧 【修正換行 Bug】：強制將字面上的 "\n" 替換成真正的換行符號
                         replyOutput.value = processedReply.replace(/\\n/g, '\n');
                         
                         autoResize(problemOutput);
@@ -294,7 +296,7 @@
                 if (currentText && !currentText.endsWith('\n')) currentText += '\n'; 
                 
                 micBtn.classList.add('recording');
-                micBtn.innerHTML = '🛑 錄音中 (再按一次停止)';
+                micBtn.innerHTML = '🛑 錄音中';
                 showToast('🎙️ 開始收音，請說話...');
             };
 
@@ -342,13 +344,17 @@
             }
         });
 
-        cameraBtn.addEventListener('click', () => { imageInput.click(); });
-        imageInput.addEventListener('change', function(e) {
-            const file = e.target.files[0];
+        // ==========================================
+        // 📷 電腦端：拍照與相簿處理邏輯
+        // ==========================================
+        pcCameraBtn.addEventListener('click', () => { cameraInput.click(); });
+        pcGalleryBtn.addEventListener('click', () => { galleryInput.click(); });
+
+        function handlePcImageFile(file, activeBtn) {
             if (!file) return;
             loadingMask.style.display = 'flex';
-            loadingMask.innerHTML = '🔍 正在辨識處方藥品...';
-            cameraBtn.disabled = true;
+            loadingMask.innerHTML = '🔍 正在辨識影像...';
+            activeBtn.disabled = true;
 
             const reader = new FileReader();
             reader.onload = function(event) {
@@ -372,34 +378,43 @@
                     })
                     .then(response => response.text())
                     .then(result => {
+                        let finalText = result;
                         try {
                             const data = JSON.parse(result);
                             if (data.error) throw new Error(data.error);
-                        } catch (error) {
-                            clinicalInput.value = (clinicalInput.value ? clinicalInput.value + '\n\n' : '') + '[系統辨識處方]：\n' + result;
-                            autoResize(clinicalInput);
-                            showToast('✅ 處方辨識完成');
-                        }
+                            finalText = data.text || result;
+                        } catch (error) {}
+                        
+                        clinicalInput.value = (clinicalInput.value ? clinicalInput.value + '\n\n' : '') + '[系統辨識結果]：\n' + finalText;
+                        autoResize(clinicalInput);
+                        showToast('✅ 影像辨識完成');
                     })
                     .catch(error => showToast('❌ 辨識失敗'))
-                    .finally(() => resetCameraUI());
+                    .finally(() => {
+                        loadingMask.style.display = 'none';
+                        loadingMask.innerHTML = '⏳ 醫療大腦運算中，請稍候...';
+                        activeBtn.disabled = false;
+                        cameraInput.value = '';
+                        galleryInput.value = '';
+                    });
                 };
                 img.src = event.target.result;
             };
             reader.readAsDataURL(file);
+        }
+
+        cameraInput.addEventListener('change', function(e) {
+            handlePcImageFile(e.target.files[0], pcCameraBtn);
         });
 
-        function resetCameraUI() {
-            loadingMask.style.display = 'none';
-            loadingMask.innerHTML = '⏳ 醫療大腦運算中，請稍候...'; 
-            cameraBtn.disabled = false;
-            imageInput.value = ''; 
-        }
+        galleryInput.addEventListener('change', function(e) {
+            handlePcImageFile(e.target.files[0], pcGalleryBtn);
+        });
 
         document.getElementById('micromedexBtn').addEventListener('click', () => {
             const micromedexUrl = 'https://www.micromedexsolutions.com/micromedex2/librarian/PFActionId/evidencexpert.FindDrugInteractions?navitem=topInteractions&isToolPage=true#/drugInteractionSearch'; 
             window.open(micromedexUrl, '_blank');
-            showToast('🔗 已開啟 Micromedex，請參考上方清單輸入藥名');
+            showToast('🔗 已開啟 Micromedex');
         });
 
         // ==========================================
@@ -444,17 +459,22 @@
                         })
                         .then(response => response.text())
                         .then(result => {
+                            let finalText = result;
                             try {
                                 const data = JSON.parse(result);
                                 if (data.error) throw new Error(data.error);
-                            } catch (error) {
-                                clinicalInput.value = (clinicalInput.value ? clinicalInput.value + '\n\n' : '') + '[系統辨識截圖]：\n' + result;
-                                autoResize(clinicalInput);
-                                showToast('✅ 截圖辨識完成');
-                            }
+                                finalText = data.text || result;
+                            } catch (error) {}
+                            
+                            clinicalInput.value = (clinicalInput.value ? clinicalInput.value + '\n\n' : '') + '[系統辨識截圖]：\n' + finalText;
+                            autoResize(clinicalInput);
+                            showToast('✅ 截圖辨識完成');
                         })
                         .catch(error => showToast('❌ 截圖辨識失敗'))
-                        .finally(() => resetCameraUI());
+                        .finally(() => {
+                            loadingMask.style.display = 'none';
+                            loadingMask.innerHTML = '⏳ 醫療大腦運算中，請稍候...';
+                        });
                     };
                     img.src = event.target.result;
                 };
@@ -465,6 +485,7 @@
             }
         });
     </script>
+    
     <!-- 電腦端顯示的 QR Code 遮罩 -->
     <div id="qrModal" class="qr-modal">
         <h2 style="color: #0f172a; margin-bottom: 5px;">📱 手機語音遙控器</h2>
@@ -484,7 +505,7 @@
         let currentRoomId = null; 
         const urlParams = new URLSearchParams(window.location.search);
         const urlRoomId = urlParams.get('roomId');
-    
+
         // 👉 狀況 A：如果網址有 roomId，代表現在是用「手機」打開的！
         if (urlRoomId) {
             document.body.innerHTML = `
@@ -502,7 +523,7 @@
                         <input type="file" id="remoteCameraInput" accept="image/*" capture="environment" style="display: none;">
                         <input type="file" id="remoteGalleryInput" accept="image/*" style="display: none;">
                     </div>
-    
+
                     <textarea id="remoteInput" style="width: 100%; height: 200px; font-size: 1.2rem; padding: 15px; border-radius: 8px; border: 1px solid #cbd5e1; outline: none;" placeholder="1. 點擊上方「語音」按鈕開始講話\n\n2. 或點擊拍照/相簿，AI 辨識結果會顯示於此..."></textarea>
                     
                     <button onclick="sendToPc()" id="remoteSendBtn" style="width: 100%; padding: 15px; margin-top: 20px; background: #10b981; color: white; border: none; border-radius: 8px; font-size: 1.2rem; font-weight: bold; box-shadow: 0 4px 6px rgba(16,185,129,0.3);">🚀 將文字傳送到電腦</button>
@@ -512,24 +533,21 @@
                     <p id="remoteStatus" style="margin-top: 15px; color: #059669; font-weight: bold; display: none;">✅ 已成功傳送到電腦畫面！</p>
                 </div>
             `;
-    
+
             // 📱 初始化連線並發送首次解鎖信號
             fetch(GAS_WEB_APP_URL, {
                 method: 'POST',
                 body: JSON.stringify({ action: 'syncSend', roomId: urlRoomId, payload: '__CONNECTED__' })
             });
-    
-            let pcLastActiveTime = Date.now(); // 追蹤電腦端最後存活時間
-    
-            // 📱 【雙向心跳機制】：手機端每 3 秒回報一次生存，同時檢查電腦指令與電腦心跳
+
+            let pcLastActiveTime = Date.now(); 
+
             let phoneHeartbeat = setInterval(() => {
-                // 1. 發送手機存活脈搏
                 fetch(GAS_WEB_APP_URL, {
                     method: 'POST',
                     body: JSON.stringify({ action: 'syncSend', roomId: urlRoomId + '_ALIVE', payload: 'HEARTBEAT' })
                 }).catch(e => {});
-    
-                // 2. 檢查電腦端指令通道 (是否主動斷線或關閉分頁)
+
                 fetch(GAS_WEB_APP_URL, {
                     method: 'POST',
                     body: JSON.stringify({ action: 'syncGet', roomId: urlRoomId + '_CMD' })
@@ -540,8 +558,7 @@
                         triggerPhoneDisconnectUI();
                     }
                 }).catch(e => {});
-    
-                // 3. 檢查電腦端心跳通道 (看看電腦是不是還活著)
+
                 fetch(GAS_WEB_APP_URL, {
                     method: 'POST',
                     body: JSON.stringify({ action: 'syncGet', roomId: urlRoomId + '_PC_ALIVE' })
@@ -549,16 +566,15 @@
                 .then(res => res.json())
                 .then(data => {
                     if (data.text === 'PC_HEARTBEAT') {
-                        pcLastActiveTime = Date.now(); // 收到電腦脈搏，更新時間
+                        pcLastActiveTime = Date.now(); 
                     }
                 }).catch(e => {});
-    
-                // 💡 【手機端逾時自動斷開防護】：如果超過 7 秒沒收到電腦脈搏（代表電腦關閉網頁、重整或當機）
+
                 if (Date.now() - pcLastActiveTime > 7000) {
                     triggerPhoneDisconnectUI();
                 }
             }, 3000);
-    
+
             function triggerPhoneDisconnectUI() {
                 clearInterval(phoneHeartbeat);
                 document.body.innerHTML = `
@@ -568,28 +584,28 @@
                     </div>
                 `;
             }
-    
+
             const remoteCameraBtn = document.getElementById('remoteCameraBtn');
             const remoteGalleryBtn = document.getElementById('remoteGalleryBtn');
             const remoteMicBtn = document.getElementById('remoteMicBtn');
             const remoteCameraInput = document.getElementById('remoteCameraInput');
             const remoteGalleryInput = document.getElementById('remoteGalleryInput');
             const remoteInput = document.getElementById('remoteInput');
-    
+
             remoteCameraBtn.addEventListener('click', () => { remoteCameraInput.click(); });
             remoteGalleryBtn.addEventListener('click', () => { remoteGalleryInput.click(); });
-    
+
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             let remoteRecognition = null;
             let isRemoteRecording = false;
             let remoteCurrentText = "";
-    
+
             if (SpeechRecognition) {
                 remoteRecognition = new SpeechRecognition();
                 remoteRecognition.continuous = true;
                 remoteRecognition.interimResults = true;
                 remoteRecognition.lang = 'zh-TW';
-    
+
                 remoteRecognition.onstart = () => {
                     isRemoteRecording = true;
                     remoteCurrentText = remoteInput.value;
@@ -600,7 +616,7 @@
                     remoteMicBtn.style.borderColor = '#fca5a5';
                     remoteMicBtn.innerHTML = '🛑 錄音中';
                 };
-    
+
                 remoteRecognition.onresult = (e) => {
                     let final = '', interim = '';
                     for (let i = e.resultIndex; i < e.results.length; ++i) {
@@ -610,11 +626,11 @@
                     remoteInput.value = remoteCurrentText + final + interim;
                     if (final) remoteCurrentText += final;
                 };
-    
+
                 remoteRecognition.onerror = (e) => { stopRemoteRec(); };
                 remoteRecognition.onend = () => { if (isRemoteRecording) stopRemoteRec(); };
             }
-    
+
             function stopRemoteRec() {
                 if (!isRemoteRecording) return;
                 isRemoteRecording = false;
@@ -625,7 +641,7 @@
                 remoteMicBtn.style.borderColor = '#a7f3d0';
                 remoteMicBtn.innerHTML = '🎙️ 語音';
             }
-    
+
             remoteMicBtn.addEventListener('click', () => {
                 if (!remoteRecognition) {
                     alert('❌ 您的手機瀏覽器不支援語音辨識');
@@ -638,7 +654,7 @@
                     catch(err) { stopRemoteRec(); }
                 }
             });
-    
+
             function handleImageFile(file, activeBtn) {
                 if (!file) return;
                 const originalText = activeBtn.innerHTML;
@@ -658,7 +674,7 @@
                         const ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0, width, height);
                         const base64String = canvas.toDataURL('image/jpeg', 0.8);
-    
+
                         fetch(GAS_WEB_APP_URL, {
                             method: 'POST',
                             body: JSON.stringify({ action: 'processImage', payload: base64String })
@@ -672,7 +688,7 @@
                                 finalText = data.text || result;
                             } catch (error) {}
                             
-                            remoteInput.value = (remoteInput.value ? remoteInput.value + '\n\n' : '') + '[處方/截圖辨識結果]：\n' + finalText;
+                            remoteInput.value = (remoteInput.value ? remoteInput.value + '\n\n' : '') + '[辨識結果]：\n' + finalText;
                             
                             activeBtn.innerHTML = '✅ 完成';
                             activeBtn.style.background = '#10b981';
@@ -683,7 +699,7 @@
                             }, 3000);
                         })
                         .catch(error => {
-                            alert('❌ 辨識失敗，請檢查網路或重試');
+                            alert('❌ 辨識失敗');
                             activeBtn.innerHTML = originalText;
                             activeBtn.style.background = (activeBtn.id === 'remoteCameraBtn' ? '#3b82f6' : '#6366f1');
                             activeBtn.disabled = false;
@@ -693,17 +709,17 @@
                 };
                 reader.readAsDataURL(file);
             }
-    
+
             remoteCameraInput.addEventListener('change', function(e) {
                 handleImageFile(e.target.files[0], remoteCameraBtn);
                 remoteCameraInput.value = '';
             });
-    
+
             remoteGalleryInput.addEventListener('change', function(e) {
                 handleImageFile(e.target.files[0], remoteGalleryBtn);
                 remoteGalleryInput.value = '';
             });
-    
+
             window.sendToPc = function() {
                 const text = remoteInput.value.trim();
                 if (!text) return;
@@ -721,7 +737,7 @@
                     setTimeout(() => status.style.display = 'none', 3000);
                 });
             };
-    
+
             window.disconnectFromPhone = function() {
                 fetch(GAS_WEB_APP_URL, {
                     method: 'POST',
@@ -738,7 +754,7 @@
                     stopSync(); 
                     return;
                 }
-    
+
                 currentRoomId = Math.random().toString(36).substring(2, 8).toUpperCase();
                 lastActiveTime = Date.now(); 
                 const currentUrl = window.location.href.split('?')[0];
@@ -748,7 +764,6 @@
                 document.getElementById('qrModal').style.display = 'flex';
                 
                 syncInterval = setInterval(() => {
-                    // 1. 檢查資料通道
                     fetch(GAS_WEB_APP_URL, {
                         method: 'POST',
                         body: JSON.stringify({ action: 'syncGet', roomId: currentRoomId })
@@ -762,7 +777,7 @@
                                 lastActiveTime = Date.now(); 
                                 
                                 const syncBtn = document.getElementById('mobileSyncBtn');
-                                syncBtn.innerHTML = '🟢 手機已連線 (點此斷開)';
+                                syncBtn.innerHTML = '🟢 手機已連線';
                                 syncBtn.style.background = '#dcfce7';
                                 syncBtn.style.color = '#15803d';
                                 syncBtn.style.borderColor = '#bbf7d0';
@@ -782,16 +797,13 @@
                             }
                         }
                     }).catch(e => {});
-    
-                    // 2. 檢查與發送心跳包通道
+
                     if (isPhoneConnected) {
-                        // 🚀 發送電腦脈搏給手機
                         fetch(GAS_WEB_APP_URL, {
                             method: 'POST',
                             body: JSON.stringify({ action: 'syncSend', roomId: currentRoomId + '_PC_ALIVE', payload: 'PC_HEARTBEAT' })
                         }).catch(e => {});
-    
-                        // 檢查手機心跳脈搏
+
                         fetch(GAS_WEB_APP_URL, {
                             method: 'POST',
                             body: JSON.stringify({ action: 'syncGet', roomId: currentRoomId + '_ALIVE' })
@@ -802,23 +814,21 @@
                                 lastActiveTime = Date.now(); 
                             }
                         }).catch(e => {});
-    
-                        // 💡 【逾時自動斷開防護】：如果超過 7 秒沒收到手機脈搏
+
                         if (Date.now() - lastActiveTime > 7000) {
-                            showToast('⚠️ 偵測到手機連線中斷（已自動解除鎖定）');
+                            showToast('⚠️ 偵測到手機連線中斷');
                             stopSync(true); 
                         }
                     }
                 }, 2000);
             });
-    
-            // 💻 【預警防護】：當電腦網頁被關閉或重整時，立刻發送斷線通知給手機
+
             window.addEventListener('beforeunload', () => {
                 if (isPhoneConnected && currentRoomId) {
                     navigator.sendBeacon(GAS_WEB_APP_URL, JSON.stringify({ action: 'syncSend', roomId: currentRoomId + '_CMD', payload: '__DISCONNECT__' }));
                 }
             });
-    
+
             window.stopSync = function(isRemote = false) {
                 document.getElementById('qrModal').style.display = 'none';
                 if (syncInterval) clearInterval(syncInterval); 
@@ -832,7 +842,7 @@
                 }
                 
                 const syncBtn = document.getElementById('mobileSyncBtn');
-                syncBtn.innerHTML = '📱 手機掃碼語音';
+                syncBtn.innerHTML = '📱 手機掃碼';
                 syncBtn.style.background = '#fef3c7';
                 syncBtn.style.color = '#b45309';
                 syncBtn.style.borderColor = '#fde68a';
