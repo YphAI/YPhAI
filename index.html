@@ -476,11 +476,13 @@
     
     <script>
         // ==========================================
-        // 🔄 手機/電腦 同步核心邏輯 (終極雙向連線版)
+        // 🔄 手機/電腦 同步核心邏輯 (心跳包雙向自動防護版)
         // ==========================================
         let syncInterval = null;
+        let heartbeatInterval = null; // 🚀 新增：心跳包計時器
+        let lastActiveTime = Date.now(); // 🚀 新增：最後收到對方訊號的時間
         let isPhoneConnected = false; 
-        let currentRoomId = null; // 🚀 新增：紀錄當前的房間密碼
+        let currentRoomId = null; 
         const urlParams = new URLSearchParams(window.location.search);
         const urlRoomId = urlParams.get('roomId');
     
@@ -493,18 +495,16 @@
                         🟢 成功與工作車連線中
                     </div>
                     
-                    <!-- 📷 拆分成兩個獨立按鈕：一個強制拍照、一個選相簿 -->
-                    <div style="display: flex; gap: 8px; width: 100%; margin-bottom: 15px;">
-                        <button id="remoteCameraBtn" style="flex: 1; padding: 12px 8px; background: #3b82f6; color: white; border: none; border-radius: 8px; font-weight: bold; font-size: 0.95rem; box-shadow: 0 4px 6px rgba(59,130,246,0.3);">📷 直接拍照</button>
-                        <button id="remoteGalleryBtn" style="flex: 1; padding: 12px 8px; background: #6366f1; color: white; border: none; border-radius: 8px; font-weight: bold; font-size: 0.95rem; box-shadow: 0 4px 6px rgba(99,102,241,0.3);">🖼️ 選擇相簿</button>
+                    <div style="display: flex; gap: 6px; width: 100%; margin-bottom: 15px;">
+                        <button id="remoteCameraBtn" style="flex: 1; padding: 12px 4px; background: #3b82f6; color: white; border: none; border-radius: 8px; font-weight: bold; font-size: 0.85rem; box-shadow: 0 4px 6px rgba(59,130,246,0.3);">📷 拍照</button>
+                        <button id="remoteGalleryBtn" style="flex: 1; padding: 12px 4px; background: #6366f1; color: white; border: none; border-radius: 8px; font-weight: bold; font-size: 0.85rem; box-shadow: 0 4px 6px rgba(99,102,241,0.3);">🖼️ 相簿</button>
+                        <button id="remoteMicBtn" style="flex: 1; padding: 12px 4px; background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; border-radius: 8px; font-weight: bold; font-size: 0.85rem; box-shadow: 0 4px 6px rgba(16,185,129,0.1);">🎙️ 語音</button>
                         
-                        <!-- 拍照專用 (加上 capture="environment" 強制開啟後鏡頭相機) -->
                         <input type="file" id="remoteCameraInput" accept="image/*" capture="environment" style="display: none;">
-                        <!-- 相簿專用 -->
                         <input type="file" id="remoteGalleryInput" accept="image/*" style="display: none;">
                     </div>
     
-                    <textarea id="remoteInput" style="width: 100%; height: 200px; font-size: 1.2rem; padding: 15px; border-radius: 8px; border: 1px solid #cbd5e1; outline: none;" placeholder="1. 點擊此處使用手機麥克風語音輸入\n\n2. 或點擊上方按鈕拍照/選相簿，AI 辨識結果會顯示於此..."></textarea>
+                    <textarea id="remoteInput" style="width: 100%; height: 200px; font-size: 1.2rem; padding: 15px; border-radius: 8px; border: 1px solid #cbd5e1; outline: none;" placeholder="1. 點擊上方「語音」按鈕開始講話\n\n2. 或點擊拍照/相簿，AI 辨識結果會顯示於此..."></textarea>
                     
                     <button onclick="sendToPc()" id="remoteSendBtn" style="width: 100%; padding: 15px; margin-top: 20px; background: #10b981; color: white; border: none; border-radius: 8px; font-size: 1.2rem; font-weight: bold; box-shadow: 0 4px 6px rgba(16,185,129,0.3);">🚀 將文字傳送到電腦</button>
                     
@@ -514,13 +514,23 @@
                 </div>
             `;
     
-            // 📱 手機一開啟，立刻發送隱形配對信號給電腦
+            // 📱 初始化連線並發送首次解鎖信號
             fetch(GAS_WEB_APP_URL, {
                 method: 'POST',
                 body: JSON.stringify({ action: 'syncSend', roomId: urlRoomId, payload: '__CONNECTED__' })
             });
     
-            let phoneInterval = setInterval(() => {
+            lastActiveTime = Date.now();
+    
+            // 📱 【心跳機制】：手機端每 3 秒回報一次「我還活著」，同時檢查電腦有沒有發出斷線指令
+            let phoneHeartbeat = setInterval(() => {
+                // 1. 發送存活脈搏
+                fetch(GAS_WEB_APP_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'syncSend', roomId: urlRoomId + '_ALIVE', payload: 'HEARTBEAT' })
+                }).catch(e => {});
+    
+                // 2. 檢查電腦端指令通道
                 fetch(GAS_WEB_APP_URL, {
                     method: 'POST',
                     body: JSON.stringify({ action: 'syncGet', roomId: urlRoomId + '_CMD' })
@@ -528,35 +538,97 @@
                 .then(res => res.json())
                 .then(data => {
                     if (data.text === '__DISCONNECT__') {
-                        clearInterval(phoneInterval);
-                        document.body.innerHTML = `
-                            <div class="mobile-remote" style="justify-content: center;">
-                                <h1 style="font-size: 2rem; margin-bottom: 10px;">🔌 已斷線</h1>
-                                <p style="color: #64748b; font-size: 1.2rem;">電腦端已結束連線，您可以關閉此網頁。</p>
-                            </div>
-                        `;
+                        triggerPhoneDisconnectUI();
                     }
                 }).catch(e => {});
             }, 3000);
     
+            function triggerPhoneDisconnectUI() {
+                clearInterval(phoneHeartbeat);
+                document.body.innerHTML = `
+                    <div class="mobile-remote" style="justify-content: center;">
+                        <h1 style="font-size: 2rem; margin-bottom: 10px;">🔌 已斷線</h1>
+                        <p style="color: #64748b; font-size: 1.2rem;">與工作車的連線已中斷，您可以關閉此網頁。</p>
+                    </div>
+                `;
+            }
+    
             const remoteCameraBtn = document.getElementById('remoteCameraBtn');
             const remoteGalleryBtn = document.getElementById('remoteGalleryBtn');
+            const remoteMicBtn = document.getElementById('remoteMicBtn');
             const remoteCameraInput = document.getElementById('remoteCameraInput');
             const remoteGalleryInput = document.getElementById('remoteGalleryInput');
             const remoteInput = document.getElementById('remoteInput');
     
-            // 綁定按鈕點擊事件
             remoteCameraBtn.addEventListener('click', () => { remoteCameraInput.click(); });
             remoteGalleryBtn.addEventListener('click', () => { remoteGalleryInput.click(); });
     
-            // 共用的圖片處理與辨識函數
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            let remoteRecognition = null;
+            let isRemoteRecording = false;
+            let remoteCurrentText = "";
+    
+            if (SpeechRecognition) {
+                remoteRecognition = new SpeechRecognition();
+                remoteRecognition.continuous = true;
+                remoteRecognition.interimResults = true;
+                remoteRecognition.lang = 'zh-TW';
+    
+                remoteRecognition.onstart = () => {
+                    isRemoteRecording = true;
+                    remoteCurrentText = remoteInput.value;
+                    if (remoteCurrentText && !remoteCurrentText.endsWith('\n')) remoteCurrentText += '\n';
+                    
+                    remoteMicBtn.style.background = '#fee2e2';
+                    remoteMicBtn.style.color = '#b91c1c';
+                    remoteMicBtn.style.borderColor = '#fca5a5';
+                    remoteMicBtn.innerHTML = '🛑 錄音中';
+                };
+    
+                remoteRecognition.onresult = (e) => {
+                    let final = '', interim = '';
+                    for (let i = e.resultIndex; i < e.results.length; ++i) {
+                        if (e.results[i].isFinal) final += e.results[i][0].transcript;
+                        else interim += e.results[i][0].transcript;
+                    }
+                    remoteInput.value = remoteCurrentText + final + interim;
+                    if (final) remoteCurrentText += final;
+                };
+    
+                remoteRecognition.onerror = (e) => { stopRemoteRec(); };
+                remoteRecognition.onend = () => { if (isRemoteRecording) stopRemoteRec(); };
+            }
+    
+            function stopRemoteRec() {
+                if (!isRemoteRecording) return;
+                isRemoteRecording = false;
+                if (remoteRecognition) remoteRecognition.stop();
+                
+                remoteMicBtn.style.background = '#ecfdf5';
+                remoteMicBtn.style.color = '#059669';
+                remoteMicBtn.style.borderColor = '#a7f3d0';
+                remoteMicBtn.innerHTML = '🎙️ 語音';
+            }
+    
+            remoteMicBtn.addEventListener('click', () => {
+                if (!remoteRecognition) {
+                    alert('❌ 您的手機瀏覽器不支援語音辨識');
+                    return;
+                }
+                if (isRemoteRecording) { stopRemoteRec(); } 
+                else {
+                    remoteMicBtn.innerHTML = '⏳ 啟動';
+                    try { remoteRecognition.start(); } 
+                    catch(err) { stopRemoteRec(); }
+                }
+            });
+    
             function handleImageFile(file, activeBtn) {
                 if (!file) return;
-                
                 const originalText = activeBtn.innerHTML;
                 activeBtn.disabled = true;
                 activeBtn.style.background = '#94a3b8';
-                activeBtn.innerHTML = '⏳ 辨識中...';
+                activeBtn.innerHTML = '⏳ 辨識中';
                 
                 const reader = new FileReader();
                 reader.onload = function(event) {
@@ -586,7 +658,7 @@
                             
                             remoteInput.value = (remoteInput.value ? remoteInput.value + '\n\n' : '') + '[處方/截圖辨識結果]：\n' + finalText;
                             
-                            activeBtn.innerHTML = '✅ 完成！';
+                            activeBtn.innerHTML = '✅ 完成';
                             activeBtn.style.background = '#10b981';
                             setTimeout(() => {
                                 activeBtn.innerHTML = originalText;
@@ -619,7 +691,6 @@
             window.sendToPc = function() {
                 const text = remoteInput.value.trim();
                 if (!text) return;
-                
                 const btn = document.getElementById('remoteSendBtn');
                 btn.innerText = '傳送中...';
                 
@@ -640,25 +711,20 @@
                     method: 'POST',
                     body: JSON.stringify({ action: 'syncSend', roomId: urlRoomId, payload: '__DISCONNECT__' })
                 }).then(() => {
-                    clearInterval(phoneInterval);
-                    document.body.innerHTML = `
-                        <div class="mobile-remote" style="justify-content: center;">
-                            <h1 style="font-size: 2rem; margin-bottom: 10px;">🔌 已結束連線</h1>
-                            <p style="color: #64748b; font-size: 1.2rem;">您已主動斷開連線，請關閉此網頁。</p>
-                        </div>
-                    `;
+                    triggerPhoneDisconnectUI();
                 });
             };
-        }
+        } 
         // 👉 狀況 B：一般電腦端網頁
         else {
             document.getElementById('mobileSyncBtn').addEventListener('click', () => {
                 if (isPhoneConnected) {
-                    stopSync(); // 如果已經連線，點擊按鈕就是斷開
+                    stopSync(); 
                     return;
                 }
     
                 currentRoomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+                lastActiveTime = Date.now(); // 初始化活動時間
                 const currentUrl = window.location.href.split('?')[0];
                 const syncUrl = `${currentUrl}?roomId=${currentRoomId}`;
                 
@@ -666,6 +732,7 @@
                 document.getElementById('qrModal').style.display = 'flex';
                 
                 syncInterval = setInterval(() => {
+                    // 1. 檢查資料通道
                     fetch(GAS_WEB_APP_URL, {
                         method: 'POST',
                         body: JSON.stringify({ action: 'syncGet', roomId: currentRoomId })
@@ -674,8 +741,9 @@
                     .then(data => {
                         if (data.text) {
                             if (data.text === '__CONNECTED__') {
-                                document.getElementById('qrModal').style.display = 'none'; // 配對成功，關閉 QR Code
+                                document.getElementById('qrModal').style.display = 'none'; 
                                 isPhoneConnected = true;
+                                lastActiveTime = Date.now(); // 收到連線，歸零計時器
                                 
                                 const syncBtn = document.getElementById('mobileSyncBtn');
                                 syncBtn.innerHTML = '🟢 手機已連線 (點此斷開)';
@@ -683,31 +751,49 @@
                                 syncBtn.style.color = '#15803d';
                                 syncBtn.style.borderColor = '#bbf7d0';
                                 
-                                showToast('📱 手機配對成功！您現在可以看到電腦螢幕了');
+                                showToast('📱 手機配對成功！');
                             } 
                             else if (data.text === '__DISCONNECT__') {
-                                // 💻 【新增】：攔截手機傳來的斷線信號
                                 showToast('📱 手機端已主動結束連線');
-                                stopSync(true); // true 代表是遠端斷線，不用再發送斷線指令回去
+                                stopSync(true); 
                             }
                             else {
+                                lastActiveTime = Date.now(); // 收到資料，歸零計時器
                                 const inputEl = document.getElementById('clinicalInput');
                                 inputEl.value = (inputEl.value ? inputEl.value + '\n' : '') + data.text;
                                 autoResize(inputEl);
                                 showToast('📥 已接收到手機傳送的資料');
                             }
                         }
-                    }).catch(e => console.log('同步檢查失敗'));
+                    }).catch(e => {});
+    
+                    // 2. 檢查心跳包通道 (看看手機是不是還活著)
+                    if (isPhoneConnected) {
+                        fetch(GAS_WEB_APP_URL, {
+                            method: 'POST',
+                            body: JSON.stringify({ action: 'syncGet', roomId: currentRoomId + '_ALIVE' })
+                        })
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data.text === 'HEARTBEAT') {
+                                lastActiveTime = Date.now(); // 收到脈搏，更新時間
+                            }
+                        }).catch(e => {});
+    
+                        // 💡 【逾時自動斷開防護】：如果超過 7 秒鐘完全沒收到手機的任何訊號（代表手機重整或關閉網頁了）
+                        if (Date.now() - lastActiveTime > 7000) {
+                            showToast('⚠️ 偵測到手機連線中斷（已自動解除鎖定）');
+                            stopSync(true); // 被動斷線，不須再發指令
+                        }
+                    }
                 }, 2000);
             });
     
-            // 參數 isRemote=true 代表是被動收到手機斷線，不需要再發指令
             window.stopSync = function(isRemote = false) {
                 document.getElementById('qrModal').style.display = 'none';
                 if (syncInterval) clearInterval(syncInterval); 
                 isPhoneConnected = false;
                 
-                // 💻 【新增】：如果是從電腦主動按斷開，發送「解散指令」讓手機知道
                 if (!isRemote && currentRoomId) {
                     fetch(GAS_WEB_APP_URL, {
                         method: 'POST',
