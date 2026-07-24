@@ -493,16 +493,21 @@
                         🟢 成功與工作車連線中
                     </div>
                     
-                    <div style="display: flex; gap: 10px; width: 100%; margin-bottom: 15px;">
-                        <button id="remoteCameraBtn" style="flex: 1; padding: 12px; background: #3b82f6; color: white; border: none; border-radius: 8px; font-weight: bold; font-size: 1.1rem; box-shadow: 0 4px 6px rgba(59,130,246,0.3);">📷 拍處方 / 傳截圖</button>
-                        <input type="file" id="remoteImageInput" accept="image/*" style="display: none;">
+                    <!-- 📷 拆分成兩個獨立按鈕：一個強制拍照、一個選相簿 -->
+                    <div style="display: flex; gap: 8px; width: 100%; margin-bottom: 15px;">
+                        <button id="remoteCameraBtn" style="flex: 1; padding: 12px 8px; background: #3b82f6; color: white; border: none; border-radius: 8px; font-weight: bold; font-size: 0.95rem; box-shadow: 0 4px 6px rgba(59,130,246,0.3);">📷 直接拍照</button>
+                        <button id="remoteGalleryBtn" style="flex: 1; padding: 12px 8px; background: #6366f1; color: white; border: none; border-radius: 8px; font-weight: bold; font-size: 0.95rem; box-shadow: 0 4px 6px rgba(99,102,241,0.3);">🖼️ 選擇相簿</button>
+                        
+                        <!-- 拍照專用 (加上 capture="environment" 強制開啟後鏡頭相機) -->
+                        <input type="file" id="remoteCameraInput" accept="image/*" capture="environment" style="display: none;">
+                        <!-- 相簿專用 -->
+                        <input type="file" id="remoteGalleryInput" accept="image/*" style="display: none;">
                     </div>
     
-                    <textarea id="remoteInput" style="width: 100%; height: 200px; font-size: 1.2rem; padding: 15px; border-radius: 8px; border: 1px solid #cbd5e1; outline: none;" placeholder="1. 點擊此處使用手機麥克風語音輸入\n\n2. 或點擊上方按鈕拍照，AI 辨識結果會顯示於此..."></textarea>
+                    <textarea id="remoteInput" style="width: 100%; height: 200px; font-size: 1.2rem; padding: 15px; border-radius: 8px; border: 1px solid #cbd5e1; outline: none;" placeholder="1. 點擊此處使用手機麥克風語音輸入\n\n2. 或點擊上方按鈕拍照/選相簿，AI 辨識結果會顯示於此..."></textarea>
                     
                     <button onclick="sendToPc()" id="remoteSendBtn" style="width: 100%; padding: 15px; margin-top: 20px; background: #10b981; color: white; border: none; border-radius: 8px; font-size: 1.2rem; font-weight: bold; box-shadow: 0 4px 6px rgba(16,185,129,0.3);">🚀 將文字傳送到電腦</button>
                     
-                    <!-- 📱 【新增】：讓手機也能主動結束連線 -->
                     <button onclick="disconnectFromPhone()" style="width: 100%; padding: 12px; margin-top: 15px; background: #fee2e2; color: #b91c1c; border: none; border-radius: 8px; font-size: 1.1rem; font-weight: bold;">❌ 結束連線</button>
                     
                     <p id="remoteStatus" style="margin-top: 15px; color: #059669; font-weight: bold; display: none;">✅ 已成功傳送到電腦畫面！</p>
@@ -515,11 +520,10 @@
                 body: JSON.stringify({ action: 'syncSend', roomId: urlRoomId, payload: '__CONNECTED__' })
             });
     
-            // 📱 【新增橋樑】：每 3 秒檢查一次電腦是否已經點擊了「斷開連線」
             let phoneInterval = setInterval(() => {
                 fetch(GAS_WEB_APP_URL, {
                     method: 'POST',
-                    body: JSON.stringify({ action: 'syncGet', roomId: urlRoomId + '_CMD' }) // 讀取專屬指令通道
+                    body: JSON.stringify({ action: 'syncGet', roomId: urlRoomId + '_CMD' })
                 })
                 .then(res => res.json())
                 .then(data => {
@@ -536,18 +540,23 @@
             }, 3000);
     
             const remoteCameraBtn = document.getElementById('remoteCameraBtn');
-            const remoteImageInput = document.getElementById('remoteImageInput');
+            const remoteGalleryBtn = document.getElementById('remoteGalleryBtn');
+            const remoteCameraInput = document.getElementById('remoteCameraInput');
+            const remoteGalleryInput = document.getElementById('remoteGalleryInput');
             const remoteInput = document.getElementById('remoteInput');
     
-            remoteCameraBtn.addEventListener('click', () => { remoteImageInput.click(); });
-            
-            remoteImageInput.addEventListener('change', function(e) {
-                const file = e.target.files[0];
+            // 綁定按鈕點擊事件
+            remoteCameraBtn.addEventListener('click', () => { remoteCameraInput.click(); });
+            remoteGalleryBtn.addEventListener('click', () => { remoteGalleryInput.click(); });
+    
+            // 共用的圖片處理與辨識函數
+            function handleImageFile(file, activeBtn) {
                 if (!file) return;
                 
-                remoteCameraBtn.disabled = true;
-                remoteCameraBtn.style.background = '#94a3b8';
-                remoteCameraBtn.innerHTML = '⏳ 醫療大腦辨識中...';
+                const originalText = activeBtn.innerHTML;
+                activeBtn.disabled = true;
+                activeBtn.style.background = '#94a3b8';
+                activeBtn.innerHTML = '⏳ 辨識中...';
                 
                 const reader = new FileReader();
                 reader.onload = function(event) {
@@ -577,24 +586,34 @@
                             
                             remoteInput.value = (remoteInput.value ? remoteInput.value + '\n\n' : '') + '[處方/截圖辨識結果]：\n' + finalText;
                             
-                            remoteCameraBtn.innerHTML = '✅ 辨識完成！';
-                            remoteCameraBtn.style.background = '#10b981';
+                            activeBtn.innerHTML = '✅ 完成！';
+                            activeBtn.style.background = '#10b981';
                             setTimeout(() => {
-                                remoteCameraBtn.innerHTML = '📷 拍處方 / 傳截圖';
-                                remoteCameraBtn.style.background = '#3b82f6';
-                                remoteCameraBtn.disabled = false;
+                                activeBtn.innerHTML = originalText;
+                                activeBtn.style.background = (activeBtn.id === 'remoteCameraBtn' ? '#3b82f6' : '#6366f1');
+                                activeBtn.disabled = false;
                             }, 3000);
                         })
                         .catch(error => {
                             alert('❌ 辨識失敗，請檢查網路或重試');
-                            remoteCameraBtn.innerHTML = '📷 拍處方 / 傳截圖';
-                            remoteCameraBtn.style.background = '#3b82f6';
-                            remoteCameraBtn.disabled = false;
+                            activeBtn.innerHTML = originalText;
+                            activeBtn.style.background = (activeBtn.id === 'remoteCameraBtn' ? '#3b82f6' : '#6366f1');
+                            activeBtn.disabled = false;
                         });
                     };
                     img.src = event.target.result;
                 };
                 reader.readAsDataURL(file);
+            }
+    
+            remoteCameraInput.addEventListener('change', function(e) {
+                handleImageFile(e.target.files[0], remoteCameraBtn);
+                remoteCameraInput.value = '';
+            });
+    
+            remoteGalleryInput.addEventListener('change', function(e) {
+                handleImageFile(e.target.files[0], remoteGalleryBtn);
+                remoteGalleryInput.value = '';
             });
     
             window.sendToPc = function() {
@@ -616,7 +635,6 @@
                 });
             };
     
-            // 📱 【新增】：從手機端主動斷開連線
             window.disconnectFromPhone = function() {
                 fetch(GAS_WEB_APP_URL, {
                     method: 'POST',
@@ -631,7 +649,7 @@
                     `;
                 });
             };
-        } 
+        }
         // 👉 狀況 B：一般電腦端網頁
         else {
             document.getElementById('mobileSyncBtn').addEventListener('click', () => {
