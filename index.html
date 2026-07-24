@@ -476,11 +476,10 @@
     
     <script>
         // ==========================================
-        // 🔄 手機/電腦 同步核心邏輯 (心跳包雙向自動防護版)
+        // 🔄 手機/電腦 同步核心邏輯 (雙向心跳與預警防護版)
         // ==========================================
         let syncInterval = null;
-        let heartbeatInterval = null; // 🚀 新增：心跳包計時器
-        let lastActiveTime = Date.now(); // 🚀 新增：最後收到對方訊號的時間
+        let lastActiveTime = Date.now(); 
         let isPhoneConnected = false; 
         let currentRoomId = null; 
         const urlParams = new URLSearchParams(window.location.search);
@@ -520,17 +519,17 @@
                 body: JSON.stringify({ action: 'syncSend', roomId: urlRoomId, payload: '__CONNECTED__' })
             });
     
-            lastActiveTime = Date.now();
+            let pcLastActiveTime = Date.now(); // 追蹤電腦端最後存活時間
     
-            // 📱 【心跳機制】：手機端每 3 秒回報一次「我還活著」，同時檢查電腦有沒有發出斷線指令
+            // 📱 【雙向心跳機制】：手機端每 3 秒回報一次生存，同時檢查電腦指令與電腦心跳
             let phoneHeartbeat = setInterval(() => {
-                // 1. 發送存活脈搏
+                // 1. 發送手機存活脈搏
                 fetch(GAS_WEB_APP_URL, {
                     method: 'POST',
                     body: JSON.stringify({ action: 'syncSend', roomId: urlRoomId + '_ALIVE', payload: 'HEARTBEAT' })
                 }).catch(e => {});
     
-                // 2. 檢查電腦端指令通道
+                // 2. 檢查電腦端指令通道 (是否主動斷線或關閉分頁)
                 fetch(GAS_WEB_APP_URL, {
                     method: 'POST',
                     body: JSON.stringify({ action: 'syncGet', roomId: urlRoomId + '_CMD' })
@@ -541,6 +540,23 @@
                         triggerPhoneDisconnectUI();
                     }
                 }).catch(e => {});
+    
+                // 3. 檢查電腦端心跳通道 (看看電腦是不是還活著)
+                fetch(GAS_WEB_APP_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'syncGet', roomId: urlRoomId + '_PC_ALIVE' })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.text === 'PC_HEARTBEAT') {
+                        pcLastActiveTime = Date.now(); // 收到電腦脈搏，更新時間
+                    }
+                }).catch(e => {});
+    
+                // 💡 【手機端逾時自動斷開防護】：如果超過 7 秒沒收到電腦脈搏（代表電腦關閉網頁、重整或當機）
+                if (Date.now() - pcLastActiveTime > 7000) {
+                    triggerPhoneDisconnectUI();
+                }
             }, 3000);
     
             function triggerPhoneDisconnectUI() {
@@ -724,7 +740,7 @@
                 }
     
                 currentRoomId = Math.random().toString(36).substring(2, 8).toUpperCase();
-                lastActiveTime = Date.now(); // 初始化活動時間
+                lastActiveTime = Date.now(); 
                 const currentUrl = window.location.href.split('?')[0];
                 const syncUrl = `${currentUrl}?roomId=${currentRoomId}`;
                 
@@ -743,7 +759,7 @@
                             if (data.text === '__CONNECTED__') {
                                 document.getElementById('qrModal').style.display = 'none'; 
                                 isPhoneConnected = true;
-                                lastActiveTime = Date.now(); // 收到連線，歸零計時器
+                                lastActiveTime = Date.now(); 
                                 
                                 const syncBtn = document.getElementById('mobileSyncBtn');
                                 syncBtn.innerHTML = '🟢 手機已連線 (點此斷開)';
@@ -758,7 +774,7 @@
                                 stopSync(true); 
                             }
                             else {
-                                lastActiveTime = Date.now(); // 收到資料，歸零計時器
+                                lastActiveTime = Date.now(); 
                                 const inputEl = document.getElementById('clinicalInput');
                                 inputEl.value = (inputEl.value ? inputEl.value + '\n' : '') + data.text;
                                 autoResize(inputEl);
@@ -767,8 +783,15 @@
                         }
                     }).catch(e => {});
     
-                    // 2. 檢查心跳包通道 (看看手機是不是還活著)
+                    // 2. 檢查與發送心跳包通道
                     if (isPhoneConnected) {
+                        // 🚀 發送電腦脈搏給手機
+                        fetch(GAS_WEB_APP_URL, {
+                            method: 'POST',
+                            body: JSON.stringify({ action: 'syncSend', roomId: currentRoomId + '_PC_ALIVE', payload: 'PC_HEARTBEAT' })
+                        }).catch(e => {});
+    
+                        // 檢查手機心跳脈搏
                         fetch(GAS_WEB_APP_URL, {
                             method: 'POST',
                             body: JSON.stringify({ action: 'syncGet', roomId: currentRoomId + '_ALIVE' })
@@ -776,17 +799,24 @@
                         .then(res => res.json())
                         .then(data => {
                             if (data.text === 'HEARTBEAT') {
-                                lastActiveTime = Date.now(); // 收到脈搏，更新時間
+                                lastActiveTime = Date.now(); 
                             }
                         }).catch(e => {});
     
-                        // 💡 【逾時自動斷開防護】：如果超過 7 秒鐘完全沒收到手機的任何訊號（代表手機重整或關閉網頁了）
+                        // 💡 【逾時自動斷開防護】：如果超過 7 秒沒收到手機脈搏
                         if (Date.now() - lastActiveTime > 7000) {
                             showToast('⚠️ 偵測到手機連線中斷（已自動解除鎖定）');
-                            stopSync(true); // 被動斷線，不須再發指令
+                            stopSync(true); 
                         }
                     }
                 }, 2000);
+            });
+    
+            // 💻 【預警防護】：當電腦網頁被關閉或重整時，立刻發送斷線通知給手機
+            window.addEventListener('beforeunload', () => {
+                if (isPhoneConnected && currentRoomId) {
+                    navigator.sendBeacon(GAS_WEB_APP_URL, JSON.stringify({ action: 'syncSend', roomId: currentRoomId + '_CMD', payload: '__DISCONNECT__' }));
+                }
             });
     
             window.stopSync = function(isRemote = false) {
