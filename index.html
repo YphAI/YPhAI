@@ -49,6 +49,10 @@
         .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1e293b; color: white; padding: 10px 20px; border-radius: 8px; font-size: 0.9rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1); opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 1000; text-align: center; }
 
         @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); } 70% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }
+
+        .qr-modal { display: none; position: fixed; inset: 0; background: rgba(255,255,255,0.95); z-index: 9999; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; }
+        .qr-modal img { width: 250px; height: 250px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin: 20px 0; }
+        .mobile-remote { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #f0f4f8; padding: 20px; text-align: center; }
     </style>
 </head>
 <body>
@@ -78,6 +82,7 @@
         <textarea id="clinicalInput" rows="2" placeholder="請語音或手動輸入..." oninput="autoResize(this)"></textarea>
         
         <div class="btn-group">
+            <button id="mobileSyncBtn" class="btn-mic" style="background: #fef3c7; color: #b45309; border-color: #fde68a;">📱 手機掃碼語音</button>
             <button id="micBtn" class="btn-mic">🎙️ 語音輸入</button>
             <button id="cameraBtn" class="btn-mic" style="background: #f8fafc; color: #475569; border-color: #cbd5e1;">📷 上傳處方 (支援貼上)</button>
             <input type="file" id="imageInput" accept="image/*" style="display: none;">
@@ -459,6 +464,167 @@
                 break;
             }
         });
+    </script>
+    <!-- 電腦端顯示的 QR Code 遮罩 -->
+    <div id="qrModal" class="qr-modal">
+        <h2 style="color: #0f172a; margin-bottom: 5px;">📱 手機語音遙控器</h2>
+        <p style="color: #64748b; margin-top: 0;">請用手機相機掃描下方條碼</p>
+        <img id="qrImage" src="" alt="QR Code">
+        <p style="color: #ef4444; font-weight: bold;">連線中... 掃描後請直接在手機上輸入</p>
+        <button onclick="stopSync()" class="btn-copy" style="padding: 10px 20px; font-size: 1rem;">❌ 關閉並停止同步</button>
+    </div>
+    
+    <script>
+        // ==========================================
+        // 🔄 手機/電腦 同步核心邏輯
+        // ==========================================
+        let syncInterval = null;
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlRoomId = urlParams.get('roomId');
+    
+        // 👉 狀況 A：如果網址有 roomId，代表現在是用「手機」打開的！
+        if (urlRoomId) {
+            // 替換為手機版專屬的 UI，加入「拍照/截圖」按鈕
+            document.body.innerHTML = `
+                <div class="mobile-remote">
+                    <h1 style="font-size: 1.5rem; margin-bottom: 10px;">📱 萬能遙控器</h1>
+                    <p style="color: #64748b; margin-bottom: 20px;">可語音輸入，或直接拍照辨識處方傳至電腦</p>
+                    
+                    <div style="display: flex; gap: 10px; width: 100%; margin-bottom: 15px;">
+                        <button id="remoteCameraBtn" style="flex: 1; padding: 12px; background: #3b82f6; color: white; border: none; border-radius: 8px; font-weight: bold; font-size: 1.1rem; box-shadow: 0 4px 6px rgba(59,130,246,0.3);">📷 拍處方 / 傳截圖</button>
+                        <input type="file" id="remoteImageInput" accept="image/*" style="display: none;">
+                    </div>
+    
+                    <textarea id="remoteInput" style="width: 100%; height: 200px; font-size: 1.2rem; padding: 15px; border-radius: 8px; border: 1px solid #cbd5e1; outline: none;" placeholder="1. 點擊此處使用手機麥克風語音輸入\n\n2. 或點擊上方按鈕拍照，AI 辨識結果會顯示於此..."></textarea>
+                    
+                    <button onclick="sendToPc()" id="remoteSendBtn" style="width: 100%; padding: 15px; margin-top: 20px; background: #10b981; color: white; border: none; border-radius: 8px; font-size: 1.2rem; font-weight: bold; box-shadow: 0 4px 6px rgba(16,185,129,0.3);">🚀 將文字傳送到電腦</button>
+                    <p id="remoteStatus" style="margin-top: 15px; color: #059669; font-weight: bold; display: none;">✅ 已成功傳送到電腦畫面！</p>
+                </div>
+            `;
+    
+            const remoteCameraBtn = document.getElementById('remoteCameraBtn');
+            const remoteImageInput = document.getElementById('remoteImageInput');
+            const remoteInput = document.getElementById('remoteInput');
+    
+            // 綁定拍照按鈕
+            remoteCameraBtn.addEventListener('click', () => { remoteImageInput.click(); });
+            
+            // 處理照片選擇與壓縮上傳
+            remoteImageInput.addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                remoteCameraBtn.disabled = true;
+                remoteCameraBtn.style.background = '#94a3b8';
+                remoteCameraBtn.innerHTML = '⏳ 醫療大腦辨識中...';
+                
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const img = new Image();
+                    img.onload = function() {
+                        // 使用 Canvas 壓縮圖片以加快傳輸
+                        const canvas = document.createElement('canvas');
+                        const MAX_WIDTH = 800;
+                        let width = img.width, height = img.height;
+                        if (width > MAX_WIDTH) { height = Math.round((height * MAX_WIDTH) / width); width = MAX_WIDTH; }
+                        canvas.width = width; canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+                        const base64String = canvas.toDataURL('image/jpeg', 0.8);
+    
+                        // 呼叫後端 (Google Drive OCR + 70B 模型)
+                        fetch(GAS_WEB_APP_URL, {
+                            method: 'POST',
+                            body: JSON.stringify({ action: 'processImage', payload: base64String })
+                        })
+                        .then(response => response.text())
+                        .then(result => {
+                            let finalText = result;
+                            try {
+                                const data = JSON.parse(result);
+                                if (data.error) throw new Error(data.error);
+                                finalText = data.text || result;
+                            } catch (error) {}
+                            
+                            // 將辨識結果填入手機輸入框
+                            remoteInput.value = (remoteInput.value ? remoteInput.value + '\n\n' : '') + '[處方/截圖辨識結果]：\n' + finalText;
+                            
+                            remoteCameraBtn.innerHTML = '✅ 辨識完成！';
+                            remoteCameraBtn.style.background = '#10b981';
+                            setTimeout(() => {
+                                remoteCameraBtn.innerHTML = '📷 拍處方 / 傳截圖';
+                                remoteCameraBtn.style.background = '#3b82f6';
+                                remoteCameraBtn.disabled = false;
+                            }, 3000);
+                        })
+                        .catch(error => {
+                            alert('❌ 辨識失敗，請檢查網路或重試');
+                            remoteCameraBtn.innerHTML = '📷 拍處方 / 傳截圖';
+                            remoteCameraBtn.style.background = '#3b82f6';
+                            remoteCameraBtn.disabled = false;
+                        });
+                    };
+                    img.src = event.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+    
+            // 傳送到電腦的邏輯
+            window.sendToPc = function() {
+                const text = remoteInput.value.trim();
+                if (!text) return;
+                
+                const btn = document.getElementById('remoteSendBtn');
+                btn.innerText = '傳送中...';
+                
+                fetch(GAS_WEB_APP_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'syncSend', roomId: urlRoomId, payload: text })
+                }).then(() => {
+                    remoteInput.value = ''; 
+                    btn.innerText = '🚀 將文字傳送到電腦';
+                    const status = document.getElementById('remoteStatus');
+                    status.style.display = 'block';
+                    setTimeout(() => status.style.display = 'none', 3000);
+                });
+            };
+        }
+        // 👉 狀況 B：一般電腦端網頁
+        else {
+            document.getElementById('mobileSyncBtn').addEventListener('click', () => {
+                // 隨機產生一個 6 碼的專屬房間密碼
+                const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+                const currentUrl = window.location.href.split('?')[0];
+                const syncUrl = `${currentUrl}?roomId=${roomId}`;
+                
+                // 呼叫免費 QR Code API 產生圖片
+                document.getElementById('qrImage').src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(syncUrl)}`;
+                document.getElementById('qrModal').style.display = 'flex';
+                
+                // 開始每 2 秒去後端看有沒有手機傳來的字
+                syncInterval = setInterval(() => {
+                    fetch(GAS_WEB_APP_URL, {
+                        method: 'POST',
+                        body: JSON.stringify({ action: 'syncGet', roomId: roomId })
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.text) {
+                            const inputEl = document.getElementById('clinicalInput');
+                            inputEl.value = (inputEl.value ? inputEl.value + '\n' : '') + data.text;
+                            autoResize(inputEl);
+                            showToast('📱 接收到手機語音輸入');
+                        }
+                    }).catch(e => console.log('同步檢查失敗'));
+                }, 2000);
+            });
+    
+            window.stopSync = function() {
+                document.getElementById('qrModal').style.display = 'none';
+                if (syncInterval) clearInterval(syncInterval); // 停止檢查，徹底斷開連線
+                showToast('🔌 已關閉手機同步連線');
+            };
+        }
     </script>
 </body>
 </html>
