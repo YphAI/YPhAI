@@ -5,7 +5,6 @@
     
     <!-- 🛡️ 防逃票閘門腳本：如果沒有 Token，一秒踢回 GAS 登入頁 -->
     <script>
-        // 👉 您的 GAS 舊網址
         const GAS_LOGIN_URL = 'https://script.google.com/macros/s/AKfycbyKk3pHaXniCbPuKcQNJBSlKQO16lcva3MGmY8C9JoTbcf9zZ0ULRl2o-s1tsW3kVtO/exec';
         
         const urlParams = new URLSearchParams(window.location.search);
@@ -13,14 +12,10 @@
         const urlName = urlParams.get('name');
 
         if (urlToken) {
-            // 1. 剛從 GAS 跳轉過來，存入「短期記憶 (sessionStorage)」，關閉分頁即銷毀
             sessionStorage.setItem('yuan_auth_token', urlToken);
             if (urlName) sessionStorage.setItem('yuan_auth_name', decodeURIComponent(urlName));
-            
-            // 2. 清除網址列上的 Token
             window.history.replaceState({}, document.title, window.location.pathname);
         } else if (!sessionStorage.getItem('yuan_auth_token')) {
-            // 3. 如果網址沒 Token，短期記憶也沒 Token，立刻踹回 GAS！
             window.location.replace(GAS_LOGIN_URL);
         }
     </script>
@@ -103,7 +98,8 @@
             <button onclick="clearClinicalInput()" class="btn-copy" style="color: #dc2626; border-color: #fca5a5; background: #fef2f2;">🗑️ 一鍵清空</button>
         </div>
 
-        <textarea id="clinicalInput" rows="2" placeholder="請語音或手動輸入..." oninput="autoResize(this)"></textarea>
+        <!-- 💡 加上 autocomplete="off" 防止瀏覽器誤判 -->
+        <textarea id="clinicalInput" rows="2" placeholder="請語音或手動輸入..." oninput="autoResize(this)" autocomplete="off"></textarea>
         
         <div class="btn-group">
             <button id="mobileSyncBtn" class="btn-mic" style="background: #fef3c7; color: #b45309; border-color: #fde68a;">📱 手機配對</button>
@@ -111,7 +107,6 @@
             <button id="pcCameraBtn" class="btn-mic" style="background: #3b82f6; color: white; border-color: #2563eb;">📷 拍照</button>
             <button id="pcGalleryBtn" class="btn-mic" style="background: #6366f1; color: white; border-color: #4f46e5;">🖼️ 相簿</button>
             
-            <!-- 隱藏的檔案上傳 inputs -->
             <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display: none;">
             <input type="file" id="galleryInput" accept="image/*" style="display: none;">
             
@@ -136,7 +131,7 @@
                     <label>問題敘述</label>
                     <button onclick="copyContent('problemOutput', this)" class="btn-copy">📋 複製問題</button>
                 </div>
-                <textarea id="problemOutput" rows="1" readonly placeholder="AI 分析後的問題將顯示於此..."></textarea>
+                <textarea id="problemOutput" rows="1" readonly placeholder="AI 分析後的問題將顯示於此..." autocomplete="off"></textarea>
             </div>
 
             <div>
@@ -144,7 +139,7 @@
                     <label>回覆內容</label>
                     <button onclick="copyContent('replyOutput', this)" class="btn-copy">📋 複製回覆</button>
                 </div>
-                <textarea id="replyOutput" rows="1" readonly placeholder="AI 分析後的回覆將顯示於此..."></textarea>
+                <textarea id="replyOutput" rows="1" readonly placeholder="AI 分析後的回覆將顯示於此..." autocomplete="off"></textarea>
             </div>
         </div>
     </div>
@@ -368,9 +363,6 @@
             }
         });
 
-        // ==========================================
-        // 📷 電腦端：拍照與相簿處理邏輯
-        // ==========================================
         pcCameraBtn.addEventListener('click', () => { cameraInput.click(); });
         pcGalleryBtn.addEventListener('click', () => { galleryInput.click(); });
 
@@ -441,9 +433,6 @@
             showToast('🔗 已開啟 Micromedex');
         });
 
-        // ==========================================
-        // 📋 支援直接貼上截圖 (Ctrl + V)
-        // ==========================================
         document.addEventListener('paste', function(e) {
             const items = (e.clipboardData || e.originalEvent.clipboardData).items;
             
@@ -520,9 +509,6 @@
     </div>
     
     <script>
-        // ==========================================
-        // 🔄 手機/電腦 同步核心邏輯 (雙向心跳與預警防護版)
-        // ==========================================
         let syncInterval = null;
         let lastActiveTime = Date.now(); 
         let isPhoneConnected = false; 
@@ -530,7 +516,6 @@
         const urlParams = new URLSearchParams(window.location.search);
         const urlRoomId = urlParams.get('roomId');
 
-        // 👉 狀況 A：如果網址有 roomId，代表現在是用「手機」打開的！
         if (urlRoomId) {
             document.body.innerHTML = `
                 <div class="mobile-remote">
@@ -548,7 +533,7 @@
                         <input type="file" id="remoteGalleryInput" accept="image/*" style="display: none;">
                     </div>
 
-                    <textarea id="remoteInput" style="width: 100%; height: 200px; font-size: 1.2rem; padding: 15px; border-radius: 8px; border: 1px solid #cbd5e1; outline: none;" placeholder="1. 點擊上方「語音」按鈕開始講話\n\n2. 或點擊拍照/相簿，AI 辨識結果會顯示於此..."></textarea>
+                    <textarea id="remoteInput" style="width: 100%; height: 200px; font-size: 1.2rem; padding: 15px; border-radius: 8px; border: 1px solid #cbd5e1; outline: none;" placeholder="1. 點擊上方「語音」按鈕開始講話\n\n2. 或點擊拍照/相簿，AI 辨識結果會顯示於此..." autocomplete="off"></textarea>
                     
                     <button onclick="sendToPc()" id="remoteSendBtn" style="width: 100%; padding: 15px; margin-top: 20px; background: #10b981; color: white; border: none; border-radius: 8px; font-size: 1.2rem; font-weight: bold; box-shadow: 0 4px 6px rgba(16,185,129,0.3);">🚀 將文字傳送到電腦</button>
                     
@@ -558,7 +543,6 @@
                 </div>
             `;
 
-            // 📱 初始化配對並發送首次解鎖信號
             fetch(GAS_WEB_APP_URL, {
                 method: 'POST',
                 body: JSON.stringify({ action: 'syncSend', roomId: urlRoomId, payload: '__CONNECTED__' })
@@ -771,7 +755,6 @@
                 });
             };
         } 
-        // 👉 狀況 B：一般電腦端網頁
         else {
             document.getElementById('mobileSyncBtn').addEventListener('click', () => {
                 if (isPhoneConnected) {
