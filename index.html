@@ -98,11 +98,10 @@
             <button onclick="clearClinicalInput()" class="btn-copy" style="color: #dc2626; border-color: #fca5a5; background: #fef2f2;">🗑️ 一鍵清空</button>
         </div>
 
-        <!-- 💡 加上 autocomplete="off" 防止瀏覽器誤判 -->
         <textarea id="clinicalInput" rows="2" placeholder="請語音或手動輸入..." oninput="autoResize(this)" autocomplete="off"></textarea>
         
         <div class="btn-group">
-            <button id="mobileSyncBtn" class="btn-mic" style="background: #fef3c7; color: #b45309; border-color: #fde68a;">📱 手機配對</button>
+            <button id="mobileSyncBtn" class="btn-mic" style="background: #fef3c7; color: #b45309; border-color: #fde68a;">📱 手機配配對</button>
             <button id="micBtn" class="btn-mic">🎙️ 語音輸入</button>
             <button id="pcCameraBtn" class="btn-mic" style="background: #3b82f6; color: white; border-color: #2563eb;">📷 拍照</button>
             <button id="pcGalleryBtn" class="btn-mic" style="background: #6366f1; color: white; border-color: #4f46e5;">🖼️ 相簿</button>
@@ -162,6 +161,9 @@
         const loadingMask = document.getElementById('loadingMask');
         const categoryBadge = document.getElementById('categoryBadge');
         const toast = document.getElementById('toast');
+
+        // 🛡️ 提取共通的 Token，供後續 API 使用
+        const getUserToken = () => sessionStorage.getItem('yuan_auth_token') || '';
 
         window.autoResize = function(el) {
             el.style.height = 'auto';
@@ -253,6 +255,7 @@
                 method: 'POST',
                 body: JSON.stringify({
                     action: 'callGemini',
+                    token: getUserToken(), // 🛡️ 帶上驗證 Token
                     payload: payloadText
                 })
             })
@@ -389,6 +392,7 @@
                         method: 'POST',
                         body: JSON.stringify({
                             action: 'processImage',
+                            token: getUserToken(), // 🛡️ 帶上驗證 Token
                             payload: base64String
                         })
                     })
@@ -467,6 +471,7 @@
                             method: 'POST',
                             body: JSON.stringify({
                                 action: 'processImage',
+                                token: getUserToken(), // 🛡️ 帶上驗證 Token
                                 payload: base64String
                             })
                         })
@@ -545,7 +550,7 @@
 
             fetch(GAS_WEB_APP_URL, {
                 method: 'POST',
-                body: JSON.stringify({ action: 'syncSend', roomId: urlRoomId, payload: '__CONNECTED__' })
+                body: JSON.stringify({ action: 'syncSend', token: getUserToken(), roomId: urlRoomId, payload: '__CONNECTED__' })
             });
 
             let pcLastActiveTime = Date.now(); 
@@ -553,12 +558,12 @@
             let phoneHeartbeat = setInterval(() => {
                 fetch(GAS_WEB_APP_URL, {
                     method: 'POST',
-                    body: JSON.stringify({ action: 'syncSend', roomId: urlRoomId + '_ALIVE', payload: 'HEARTBEAT' })
+                    body: JSON.stringify({ action: 'syncSend', token: getUserToken(), roomId: urlRoomId + '_ALIVE', payload: 'HEARTBEAT' })
                 }).catch(e => {});
 
                 fetch(GAS_WEB_APP_URL, {
                     method: 'POST',
-                    body: JSON.stringify({ action: 'syncGet', roomId: urlRoomId + '_CMD' })
+                    body: JSON.stringify({ action: 'syncGet', token: getUserToken(), roomId: urlRoomId + '_CMD' })
                 })
                 .then(res => res.json())
                 .then(data => {
@@ -569,7 +574,7 @@
 
                 fetch(GAS_WEB_APP_URL, {
                     method: 'POST',
-                    body: JSON.stringify({ action: 'syncGet', roomId: urlRoomId + '_PC_ALIVE' })
+                    body: JSON.stringify({ action: 'syncGet', token: getUserToken(), roomId: urlRoomId + '_PC_ALIVE' })
                 })
                 .then(res => res.json())
                 .then(data => {
@@ -685,7 +690,7 @@
 
                         fetch(GAS_WEB_APP_URL, {
                             method: 'POST',
-                            body: JSON.stringify({ action: 'processImage', payload: base64String })
+                            body: JSON.stringify({ action: 'processImage', token: getUserToken(), payload: base64String })
                         })
                         .then(response => response.text())
                         .then(result => {
@@ -736,7 +741,7 @@
                 
                 fetch(GAS_WEB_APP_URL, {
                     method: 'POST',
-                    body: JSON.stringify({ action: 'syncSend', roomId: urlRoomId, payload: text })
+                    body: JSON.stringify({ action: 'syncSend', token: getUserToken(), roomId: urlRoomId, payload: text })
                 }).then(() => {
                     remoteInput.value = ''; 
                     btn.innerText = '🚀 將文字傳送到電腦';
@@ -749,7 +754,7 @@
             window.disconnectFromPhone = function() {
                 fetch(GAS_WEB_APP_URL, {
                     method: 'POST',
-                    body: JSON.stringify({ action: 'syncSend', roomId: urlRoomId, payload: '__DISCONNECT__' })
+                    body: JSON.stringify({ action: 'syncSend', token: getUserToken(), roomId: urlRoomId, payload: '__DISCONNECT__' })
                 }).then(() => {
                     triggerPhoneDisconnectUI();
                 });
@@ -765,7 +770,9 @@
                 currentRoomId = Math.random().toString(36).substring(2, 8).toUpperCase();
                 lastActiveTime = Date.now(); 
                 const currentUrl = window.location.href.split('?')[0];
-                const syncUrl = `${currentUrl}?roomId=${currentRoomId}`;
+                
+                // 🛡️ 將安全鑰匙 (Token) 塞進 QR Code 網址中，讓手機也能合法通過後端驗證！
+                const syncUrl = `${currentUrl}?roomId=${currentRoomId}&token=${getUserToken()}`;
                 
                 document.getElementById('qrImage').src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(syncUrl)}`;
                 document.getElementById('qrModal').style.display = 'flex';
@@ -773,7 +780,7 @@
                 syncInterval = setInterval(() => {
                     fetch(GAS_WEB_APP_URL, {
                         method: 'POST',
-                        body: JSON.stringify({ action: 'syncGet', roomId: currentRoomId })
+                        body: JSON.stringify({ action: 'syncGet', token: getUserToken(), roomId: currentRoomId })
                     })
                     .then(res => res.json())
                     .then(data => {
@@ -808,12 +815,12 @@
                     if (isPhoneConnected) {
                         fetch(GAS_WEB_APP_URL, {
                             method: 'POST',
-                            body: JSON.stringify({ action: 'syncSend', roomId: currentRoomId + '_PC_ALIVE', payload: 'PC_HEARTBEAT' })
+                            body: JSON.stringify({ action: 'syncSend', token: getUserToken(), roomId: currentRoomId + '_PC_ALIVE', payload: 'PC_HEARTBEAT' })
                         }).catch(e => {});
 
                         fetch(GAS_WEB_APP_URL, {
                             method: 'POST',
-                            body: JSON.stringify({ action: 'syncGet', roomId: currentRoomId + '_ALIVE' })
+                            body: JSON.stringify({ action: 'syncGet', token: getUserToken(), roomId: currentRoomId + '_ALIVE' })
                         })
                         .then(res => res.json())
                         .then(data => {
@@ -832,7 +839,7 @@
 
             window.addEventListener('beforeunload', () => {
                 if (isPhoneConnected && currentRoomId) {
-                    navigator.sendBeacon(GAS_WEB_APP_URL, JSON.stringify({ action: 'syncSend', roomId: currentRoomId + '_CMD', payload: '__DISCONNECT__' }));
+                    navigator.sendBeacon(GAS_WEB_APP_URL, JSON.stringify({ action: 'syncSend', token: getUserToken(), roomId: currentRoomId + '_CMD', payload: '__DISCONNECT__' }));
                 }
             });
 
@@ -844,7 +851,7 @@
                 if (!isRemote && currentRoomId) {
                     fetch(GAS_WEB_APP_URL, {
                         method: 'POST',
-                        body: JSON.stringify({ action: 'syncSend', roomId: currentRoomId + '_CMD', payload: '__DISCONNECT__' })
+                        body: JSON.stringify({ action: 'syncSend', token: getUserToken(), roomId: currentRoomId + '_CMD', payload: '__DISCONNECT__' })
                     });
                 }
                 
