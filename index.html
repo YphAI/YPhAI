@@ -5,7 +5,7 @@
     
     <!-- 🛡️ 防逃票閘門腳本：如果沒有 Token，一秒踢回 GAS 登入頁 -->
     <script>
-        // 👉 請確保這裡的網址是您的 GAS 舊網址！
+        // 👉 您的 GAS 舊網址
         const GAS_LOGIN_URL = 'https://script.google.com/macros/s/AKfycbyKk3pHaXniCbPuKcQNJBSlKQO16lcva3MGmY8C9JoTbcf9zZ0ULRl2o-s1tsW3kVtO/exec';
         
         const urlParams = new URLSearchParams(window.location.search);
@@ -13,14 +13,14 @@
         const urlName = urlParams.get('name');
 
         if (urlToken) {
-            // 1. 如果網址帶有 Token (剛從 GAS 跳轉過來)，存入記憶體
-            localStorage.setItem('yuan_auth_token', urlToken);
-            if (urlName) localStorage.setItem('yuan_auth_name', decodeURIComponent(urlName));
+            // 1. 剛從 GAS 跳轉過來，存入「短期記憶 (sessionStorage)」，關閉分頁即銷毀
+            sessionStorage.setItem('yuan_auth_token', urlToken);
+            if (urlName) sessionStorage.setItem('yuan_auth_name', decodeURIComponent(urlName));
             
-            // 2. 清除網址列上的 Token，避免藥師複製網址給別人
+            // 2. 清除網址列上的 Token
             window.history.replaceState({}, document.title, window.location.pathname);
-        } else if (!localStorage.getItem('yuan_auth_token')) {
-            // 3. 如果網址沒 Token，記憶體也沒 Token (偷連進來的)，立刻踹回 GAS！
+        } else if (!sessionStorage.getItem('yuan_auth_token')) {
+            // 3. 如果網址沒 Token，短期記憶也沒 Token，立刻踹回 GAS！
             window.location.replace(GAS_LOGIN_URL);
         }
     </script>
