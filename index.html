@@ -3,18 +3,32 @@
 <head>
     <meta charset="UTF-8">
     
-    <!-- 🛡️ 防逃票閘門腳本：如果沒有 Token，一秒踢回 GAS 登入頁 -->
+    <!-- 🛡️ 防逃票閘門腳本：精準過濾 Token，完美保留 roomId 配對號碼 -->
     <script>
-        const GAS_LOGIN_URL = 'https://tinyurl.com/YuanphQ';
+        // 替換為您的原長網址 (或繼續用短網址皆可)
+        const GAS_LOGIN_URL = 'https://script.google.com/macros/s/AKfycbyKk3pHaXniCbPuKcQNJBSlKQO16lcva3MGmY8C9JoTbcf9zZ0ULRl2o-s1tsW3kVtO/exec';
         
         const urlParams = new URLSearchParams(window.location.search);
         const urlToken = urlParams.get('token');
         const urlName = urlParams.get('name');
 
         if (urlToken) {
+            // 1. 儲存驗證資訊
             sessionStorage.setItem('yuan_auth_token', urlToken);
             if (urlName) sessionStorage.setItem('yuan_auth_name', decodeURIComponent(urlName));
-            window.history.replaceState({}, document.title, window.location.pathname);
+            
+            // 2. 🛡️ 關鍵修復：只刪除驗證資訊，保留 roomId
+            urlParams.delete('token');
+            urlParams.delete('name');
+            
+            // 3. 重組網址（這樣 roomId 就能安全留下來給手機配對囉！）
+            let newUrl = window.location.pathname;
+            let queryString = urlParams.toString();
+            if (queryString) {
+                newUrl += '?' + queryString;
+            }
+            window.history.replaceState({}, document.title, newUrl);
+            
         } else if (!sessionStorage.getItem('yuan_auth_token')) {
             window.location.replace(GAS_LOGIN_URL);
         }
@@ -146,7 +160,7 @@
     <div id="toast" class="toast">訊息提示</div>
 
     <script>
-        const GAS_WEB_APP_URL = 'https://tinyurl.com/YuanphQ'; 
+        const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyKk3pHaXniCbPuKcQNJBSlKQO16lcva3MGmY8C9JoTbcf9zZ0ULRl2o-s1tsW3kVtO/exec';
 
         const clinicalInput = document.getElementById('clinicalInput');
         const problemOutput = document.getElementById('problemOutput');
