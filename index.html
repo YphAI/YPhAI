@@ -165,7 +165,6 @@
     </div>
 
     <script>
-        // 🎯 正確的全域 URL 設定
         const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyKk3pHaXniCbPuKcQNJBSlKQO16lcva3MGmY8C9JoTbcf9zZ0ULRl2o-s1tsW3kVtO/exec'; 
 
         const clinicalInput = document.getElementById('clinicalInput');
@@ -442,15 +441,16 @@
         });
     </script>
     
-    <!-- 📱📱📱 手機配對與遙控器邏輯 (獨立獨立抽離，不再被放在 else 裡面) 📱📱📱 -->
+    <!-- 📱📱📱 手機配對與遙控器邏輯 (已修復變數衝突問題) 📱📱📱 -->
     <script>
         let syncInterval = null;
         let lastActiveTime = Date.now(); 
         let isPhoneConnected = false; 
         let currentRoomId = null; 
         
-        const urlParams = new URLSearchParams(window.location.search);
-        const urlRoomId = urlParams.get('roomId');
+        // 🎯 [修正點]：變數名稱從 urlParams 改為 mobileUrlParams，避免與上方 <head> 的變數打架崩潰！
+        const mobileUrlParams = new URLSearchParams(window.location.search);
+        const urlRoomId = mobileUrlParams.get('roomId');
 
         // 🟢 情境一：如果是手機掃 QR Code 進來的畫面
         if (urlRoomId) {
@@ -534,13 +534,14 @@
             remoteCameraBtn.addEventListener('click', () => { remoteCameraInput.click(); });
             remoteGalleryBtn.addEventListener('click', () => { remoteGalleryInput.click(); });
 
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            // 🎯 [修正點]：將變數名稱改為 MobileSpeechRecognition，避免與上方變數打架
+            const MobileSpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             let remoteRecognition = null;
             let isRemoteRecording = false;
             let remoteCurrentText = "";
 
-            if (SpeechRecognition) {
-                remoteRecognition = new SpeechRecognition();
+            if (MobileSpeechRecognition) {
+                remoteRecognition = new MobileSpeechRecognition();
                 remoteRecognition.continuous = true;
                 remoteRecognition.interimResults = true;
                 remoteRecognition.lang = 'zh-TW';
@@ -619,7 +620,6 @@
                 currentRoomId = Math.random().toString(36).substring(2, 8).toUpperCase();
                 lastActiveTime = Date.now(); 
                 
-                // 🎯 強制使用 GitHub Pages 主網址
                 const githubPageBaseUrl = 'https://minutessbbs.github.io/YuanPhQ/';
                 const syncUrl = `${githubPageBaseUrl}?roomId=${currentRoomId}&token=${getUserToken()}`;
                 
