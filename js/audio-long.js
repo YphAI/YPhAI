@@ -1,5 +1,5 @@
 // audio-long.js
-// ⏺️ 長段錄音共用工具 (Groq Whisper API)
+// ⏺️ 長段錄音共用工具 (Groq Whisper API) - 關閉降噪 + 一鍵到底版
 
 window.SharedLongAudio = {
     isRecording: false,
@@ -26,7 +26,11 @@ window.SharedLongAudio = {
                 if (this.currentStream) {
                     this.currentStream.getTracks().forEach(track => track.stop());
                 }
-                this.currentStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+                
+                // 🎯 修正 1：關閉降噪 (noiseSuppression) 與自動音量 (autoGainControl)，保留台語真實發音！
+                this.currentStream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: false } 
+                });
 
                 let options = {};
                 if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) options = { mimeType: 'audio/webm;codecs=opus' };
@@ -108,9 +112,20 @@ window.SharedLongAudio = {
                 } catch (e) {}
 
                 this.currentInput.value = (this.currentInput.value ? this.currentInput.value + '\n\n' : '') + '[長段語音轉錄]：\n' + finalText;
-                if (!this.isRemote && typeof autoResize === 'function') {
-                    autoResize(this.currentInput);
-                    if (typeof showToast === 'function') showToast('✅ 語音辨識完成！');
+                
+                // 🎯 修正 2：一鍵到底邏輯
+                if (!this.isRemote) {
+                    if (typeof autoResize === 'function') autoResize(this.currentInput);
+                    if (typeof showToast === 'function') showToast('✅ 語音辨識完成，自動送出分析...');
+                    
+                    // 電腦端：直接幫忙點擊送出分析
+                    const analyzeBtn = document.getElementById('analyzeBtn');
+                    if (analyzeBtn && !analyzeBtn.disabled) analyzeBtn.click();
+                } else {
+                    // 手機端：呼叫手機版的自動傳送並掛上旗標
+                    if (typeof window.sendToPc === 'function') {
+                        window.sendToPc(true); 
+                    }
                 }
             })
             .catch(err => alert('❌ 語音上傳失敗'))
@@ -132,7 +147,6 @@ window.SharedLongAudio = {
     }
 };
 
-// PC 端綁定
 if (typeof longAudioBtn !== 'undefined') {
     longAudioBtn.addEventListener('click', () => SharedLongAudio.toggle(longAudioBtn, clinicalInput, false));
 }
