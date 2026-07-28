@@ -1,7 +1,7 @@
 // mobile-sync.js
 // 📱 手機語音遙控器配對邏輯（呼叫共用工具版）
 
-const DISCONNECT_TIMEOUT_MS = 25000; 
+const DISCONNECT_TIMEOUT_MS = 60000; 
 
 let syncInterval = null;
 let lastActiveTime = Date.now();
