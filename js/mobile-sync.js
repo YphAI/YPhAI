@@ -1,7 +1,7 @@
 // mobile-sync.js
-// 📱 手機語音遙控器配對邏輯（呼叫共用工具版）
+// 📱 手機語音遙控器配對邏輯（呼叫共用工具版 + 一鍵到底）
 
-const DISCONNECT_TIMEOUT_MS = 60000; 
+const DISCONNECT_TIMEOUT_MS = 60000; // ⏳ 斷線容忍時間延長為 60 秒
 
 let syncInterval = null;
 let lastActiveTime = Date.now();
@@ -96,13 +96,13 @@ if (urlRoomId) {
     remoteMicBtn.addEventListener('click', () => SharedShortAudio.toggle(remoteMicBtn, remoteInput));
     remoteLongAudioBtn.addEventListener('click', () => SharedLongAudio.toggle(remoteLongAudioBtn, remoteInput, true));
 
-        window.sendToPc = function(autoAnalyze = false) {
+    // 🎯 傳送至電腦 (加入 autoAnalyze 參數支援，偷塞隱藏標記)
+    window.sendToPc = function(autoAnalyze = false) {
         const text = remoteInput.value.trim();
         if (!text) return alert('⚠️ 內容為空');
         const btn = document.getElementById('remoteSendBtn');
         btn.innerText = '傳送中...';
         
-        // 🎯 偷塞隱藏標記，告訴電腦收到後直接啟動分析
         const payloadText = autoAnalyze === true ? `[AUTO_ANALYZE]${text}` : text;
         
         fetch(GAS_WEB_APP_URL, { method: 'POST', body: JSON.stringify({ action: 'syncSend', token: getUserToken(), roomId: urlRoomId, payload: payloadText }) })
@@ -114,7 +114,6 @@ if (urlRoomId) {
             setTimeout(() => status.style.display = 'none', 3000);
         });
     };
-
 
     window.disconnectFromPhone = function() {
         fetch(GAS_WEB_APP_URL, { method: 'POST', body: JSON.stringify({ action: 'syncSend', token: getUserToken(), roomId: urlRoomId, payload: '__DISCONNECT__' }) })
@@ -132,7 +131,6 @@ else {
         currentRoomId = Math.random().toString(36).substring(2, 8).toUpperCase();
         lastActiveTime = Date.now();
         
-        // ⚠️ 記得把這裡的網址改成您最新的 GitHub 網址
         const githubPageBaseUrl = 'https://yphai.github.io/YPhAI/';
         const syncUrl = `${githubPageBaseUrl}?roomId=${currentRoomId}&token=${getUserToken()}`;
         
@@ -155,31 +153,39 @@ else {
                         syncBtn.style.color = '#15803d';
                         syncBtn.style.borderColor = '#bbf7d0';
                         
-                        showToast('📱 手機配對成功！');
+                        if (typeof showToast === 'function') showToast('📱 手機配對成功！');
                     } 
                     else if (data.text === '__DISCONNECT__') {
-                        showToast('📱 手機已主動斷開');
+                        if (typeof showToast === 'function') showToast('📱 手機已主動斷開');
                         stopSync(true); 
                     }
-                        window.sendToPc = function(autoAnalyze = false) {
-        const text = remoteInput.value.trim();
-        if (!text) return alert('⚠️ 內容為空');
-        const btn = document.getElementById('remoteSendBtn');
-        btn.innerText = '傳送中...';
-        
-        // 🎯 偷塞隱藏標記，告訴電腦收到後直接啟動分析
-        const payloadText = autoAnalyze === true ? `[AUTO_ANALYZE]${text}` : text;
-        
-        fetch(GAS_WEB_APP_URL, { method: 'POST', body: JSON.stringify({ action: 'syncSend', token: getUserToken(), roomId: urlRoomId, payload: payloadText }) })
-        .then(() => {
-            remoteInput.value = ''; 
-            btn.innerText = '🚀 將文字傳送到電腦';
-            const status = document.getElementById('remoteStatus');
-            status.style.display = 'block';
-            setTimeout(() => status.style.display = 'none', 3000);
-        });
-    };
+                    else {
+                        lastActiveTime = Date.now(); 
+                        let receivedText = data.text;
+                        let triggerAuto = false;
 
+                        // 🎯 攔截標記：發現是手機要求一鍵到底，就啟動開關並把標記拿掉
+                        if (receivedText.startsWith('[AUTO_ANALYZE]')) {
+                            triggerAuto = true;
+                            receivedText = receivedText.replace('[AUTO_ANALYZE]', '');
+                        }
+
+                        const inputEl = document.getElementById('clinicalInput');
+                        inputEl.value = (inputEl.value ? inputEl.value + '\n' : '') + receivedText;
+                        if (typeof autoResize === 'function') autoResize(inputEl);
+                        if (typeof showToast === 'function') showToast('📥 已接收手機傳送的內容');
+
+                        // 🎯 電腦端執行一鍵到底
+                        if (triggerAuto) {
+                            setTimeout(() => {
+                                const analyzeBtn = document.getElementById('analyzeBtn');
+                                if (analyzeBtn && !analyzeBtn.disabled) {
+                                    if (typeof showToast === 'function') showToast('🤖 啟動自動分析...');
+                                    analyzeBtn.click();
+                                }
+                            }, 500);
+                        }
+                    }
                 }
             }).catch(e => {});
 
@@ -190,7 +196,7 @@ else {
                 .then(data => { if (data.text === 'HEARTBEAT') lastActiveTime = Date.now(); }).catch(e => {});
 
                 if (Date.now() - lastActiveTime > DISCONNECT_TIMEOUT_MS) {
-                    showToast('⚠️ 偵測到手機離線');
+                    if (typeof showToast === 'function') showToast('⚠️ 偵測到手機離線');
                     stopSync(true); 
                 }
             }
@@ -207,11 +213,13 @@ else {
         }
         
         const syncBtn = document.getElementById('mobileSyncBtn');
-        syncBtn.innerHTML = '📱 手機配對';
-        syncBtn.style.background = '#fef3c7';
-        syncBtn.style.color = '#b45309';
-        syncBtn.style.borderColor = '#fde68a';
+        if (syncBtn) {
+            syncBtn.innerHTML = '📱 手機配對';
+            syncBtn.style.background = '#fef3c7';
+            syncBtn.style.color = '#b45309';
+            syncBtn.style.borderColor = '#fde68a';
+        }
         
-        if (!isRemote) showToast('🔌 已結束手機配對');
+        if (!isRemote && typeof showToast === 'function') showToast('🔌 已結束手機配對');
     };
 }
