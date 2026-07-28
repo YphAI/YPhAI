@@ -438,7 +438,10 @@
                     };
 
                     mediaRecorder.onstop = () => {
-                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        // 🎯 修正：自動抓取瀏覽器真實的錄音格式 (Safari 是 mp4, Chrome 是 webm)
+                        const actualMimeType = mediaRecorder.mimeType || 'audio/webm';
+                        const audioBlob = new Blob(audioChunks, { type: actualMimeType });
+                        
                         processLongAudioUpload(audioBlob);
                         stream.getTracks().forEach(track => track.stop());
                     };
