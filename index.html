@@ -4,19 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <!-- 🛡️ 防逃票閘門腳本：精準過濾 Token 與 Name，完整保留 roomId 配對號碼 -->
     <script>
         const GAS_LOGIN_URL = 'https://script.google.com/macros/s/AKfycbyKk3pHaXniCbPuKcQNJBSlKQO16lcva3MGmY8C9JoTbcf9zZ0ULRl2o-s1tsW3kVtO/exec';
+        const EXPIRY_MS = 6 * 60 * 60 * 1000; // ⏳ 6 小時倒數計時
         
         const urlParams = new URLSearchParams(window.location.search);
         const urlToken = urlParams.get('token');
         const urlName = urlParams.get('name');
 
         if (urlToken) {
-            sessionStorage.setItem('yuan_auth_token', urlToken);
-            if (urlName) sessionStorage.setItem('yuan_auth_name', decodeURIComponent(urlName));
+            // 1. 從登入頁跳轉過來時：寫入 localStorage (所有分頁共享)，並記錄當下時間戳
+            localStorage.setItem('yuan_auth_token', urlToken);
+            localStorage.setItem('yuan_auth_time', Date.now().toString());
+            if (urlName) localStorage.setItem('yuan_auth_name', decodeURIComponent(urlName));
             
-            // 🎯 精準刪除敏感認證參數，保留 roomId 供手機連線
+            // 2. 精準刪除敏感認證參數，保留 roomId 供手機連線
             urlParams.delete('token');
             urlParams.delete('name');
             
@@ -27,77 +29,20 @@
             }
             window.history.replaceState({}, document.title, newUrl);
             
-        } else if (!sessionStorage.getItem('yuan_auth_token')) {
-            window.location.replace(GAS_LOGIN_URL);
-        }
-    // 📋 支援電腦端直接貼上截圖 (Ctrl + V)
-        document.addEventListener('paste', function(e) {
-            const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+        } else {
+            // 3. 一般載入網頁時：檢查是否已登入，以及是否超過 6 小時
+            const savedToken = localStorage.getItem('yuan_auth_token');
+            const savedTime = localStorage.getItem('yuan_auth_time');
+            const now = Date.now();
             
-            for (let i = 0; i < items.length; i++) {
-                if (items[i].type.indexOf('image') !== 0) continue;
-                
-                const blob = items[i].getAsFile();
-                if (!blob) return;
-
-                showToast('📋 偵測到剪貼簿截圖，正在辨識...');
-                loadingMask.style.display = 'flex';
-                loadingMask.innerHTML = '🔍 正在辨識貼上的截圖...';
-
-                const reader = new FileReader();
-                reader.onload = function(event) {
-                    const img = new Image();
-                    img.onload = function() {
-                        const canvas = document.createElement('canvas');
-                        const MAX_WIDTH = 800;
-                        let width = img.width, height = img.height;
-                        if (width > MAX_WIDTH) { 
-                            height = Math.round((height * MAX_WIDTH) / width); 
-                            width = MAX_WIDTH; 
-                        }
-                        canvas.width = width; 
-                        canvas.height = height;
-                        const ctx = canvas.getContext('2d');
-                        ctx.drawImage(img, 0, 0, width, height);
-                        const base64String = canvas.toDataURL('image/jpeg', 0.8);
-
-                        fetch(GAS_WEB_APP_URL, {
-                            method: 'POST',
-                            body: JSON.stringify({
-                                action: 'processImage',
-                                token: getUserToken(),
-                                payload: base64String
-                            })
-                        })
-                        .then(response => response.text())
-                        .then(result => {
-                            let finalText = result;
-                            try {
-                                const data = JSON.parse(result);
-                                if (data.error) throw new Error(data.error);
-                                finalText = data.text || result;
-                            } catch (error) {}
-                            
-                            clinicalInput.value = (clinicalInput.value ? clinicalInput.value + '\n\n' : '') + '[系統辨識截圖]：\n' + finalText;
-                            autoResize(clinicalInput);
-                            showToast('✅ 截圖辨識完成');
-                        })
-                        .catch(error => showToast('❌ 截圖辨識失敗'))
-                        .finally(() => {
-                            loadingMask.style.display = 'none';
-                            loadingMask.innerHTML = '⏳ 醫療大腦運算中，請稍候...';
-                        });
-                    };
-                    img.src = event.target.result;
-                };
-                reader.readAsDataURL(blob);
-                
-                e.preventDefault();
-                break;
+            if (!savedToken || !savedTime || (now - parseInt(savedTime) > EXPIRY_MS)) {
+                localStorage.removeItem('yuan_auth_token');
+                localStorage.removeItem('yuan_auth_time');
+                localStorage.removeItem('yuan_auth_name');
+                window.location.replace(GAS_LOGIN_URL);
             }
-        });
+        }
     </script>
-    
 
     <title>醫療輔助系統</title>
     <style>
@@ -179,7 +124,8 @@
         
         <div class="btn-group">
             <button id="mobileSyncBtn" class="btn-mic" style="background: #fef3c7; color: #b45309; border-color: #fde68a;">📱 手機配對</button>
-            <button id="micBtn" class="btn-mic">🎙️ 語音輸入</button>
+            <button id="longAudioBtn" class="btn-mic" style="background: #fdf2f8; color: #db2777; border-color: #fbcfe8;">⏺️ 長段錄音</button>
+            <button id="micBtn" class="btn-mic">🎙️ 短句即時</button>
             <button id="pcCameraBtn" class="btn-mic" style="background: #3b82f6; color: white; border-color: #2563eb;">📷 拍照</button>
             <button id="pcGalleryBtn" class="btn-mic" style="background: #6366f1; color: white; border-color: #4f46e5;">🖼️ 相簿</button>
             
@@ -222,7 +168,6 @@
 
     <div id="toast" class="toast">訊息提示</div>
 
-    <!-- 電腦端顯示的 QR Code 遮罩 -->
     <div id="qrModal" class="qr-modal">
         <h2 style="color: #0f172a; margin-bottom: 5px;">📱 手機語音遙控器</h2>
         <p style="color: #64748b; margin-top: 0;">請用手機相機掃描下方條碼</p>
@@ -239,6 +184,7 @@
         const replyOutput = document.getElementById('replyOutput');
         const categoryTabs = document.getElementById('categoryTabs');
         const micBtn = document.getElementById('micBtn');
+        const longAudioBtn = document.getElementById('longAudioBtn');
         const pcCameraBtn = document.getElementById('pcCameraBtn');
         const pcGalleryBtn = document.getElementById('pcGalleryBtn');
         const cameraInput = document.getElementById('cameraInput');
@@ -248,7 +194,8 @@
         const categoryBadge = document.getElementById('categoryBadge');
         const toast = document.getElementById('toast');
 
-        const getUserToken = () => sessionStorage.getItem('yuan_auth_token') || '';
+        // 🎯 [修正]：改從 localStorage 讀取通行憑證
+        const getUserToken = () => localStorage.getItem('yuan_auth_token') || '';
 
         window.autoResize = function(el) {
             el.style.height = 'auto';
@@ -386,12 +333,41 @@
             });
         });
 
-        // 🎙️ 本地語音辨識
+        // ==========================================
+        // 🎙️ 語音雙引擎：短句即時 (Web Speech API) + 長段錄音 (Whisper)
+        // ==========================================
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         let recognition = null;
-        let isRecording = false;
+        
+        let isShortRecording = false; 
+        let isLongRecording = false;  
         let currentText = ""; 
 
+        // ------------------------------------------
+        // 🛠️ 輔助停止函式 (無縫切換機制)
+        // ------------------------------------------
+        function stopShortRec() {
+            if (!isShortRecording) return;
+            isShortRecording = false;
+            if (recognition) recognition.stop(); 
+            micBtn.classList.remove('recording');
+            micBtn.innerHTML = '🎙️ 短句即時';
+        }
+
+        function stopLongRecAndUpload() {
+            if (!isLongRecording) return;
+            isLongRecording = false;
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
+            longAudioBtn.innerHTML = '⏳ 處理中...';
+            longAudioBtn.classList.remove('recording');
+            longAudioBtn.disabled = true;
+        }
+
+        // ------------------------------------------
+        // 引擎 A：短句即時 (消滅手機版重複段落)
+        // ------------------------------------------
         if (SpeechRecognition) {
             recognition = new SpeechRecognition();
             recognition.continuous = true;
@@ -399,50 +375,135 @@
             recognition.lang = 'zh-TW';
 
             recognition.onstart = () => {
-                isRecording = true;
+                isShortRecording = true;
                 currentText = clinicalInput.value; 
                 if (currentText && !currentText.endsWith('\n')) currentText += '\n'; 
+                
                 micBtn.classList.add('recording');
-                micBtn.innerHTML = '🛑 錄音中';
-                showToast('🎙️ 開始收音...');
+                micBtn.innerHTML = '⏹️ 停止即時辨識';
             };
 
             recognition.onresult = (e) => {
-                let final = '', interim = '';
-                for (let i = e.resultIndex; i < e.results.length; ++i) {
-                    if (e.results[i].isFinal) final += e.results[i][0].transcript;
-                    else interim += e.results[i][0].transcript;
+                let sessionTranscript = '';
+                for (let i = 0; i < e.results.length; ++i) {
+                    sessionTranscript += e.results[i][0].transcript;
                 }
-                clinicalInput.value = currentText + final + interim;
+                clinicalInput.value = currentText + sessionTranscript;
                 autoResize(clinicalInput);
-                if (final) currentText += final; 
             };
 
-            recognition.onerror = (e) => { stopRec(false); };
-            recognition.onend = () => { if(isRecording) stopRec(true); };
-        }
-
-        function stopRec(autoSubmit = true) {
-            if (!isRecording) return;
-            isRecording = false;
-            recognition.stop(); 
-            micBtn.classList.remove('recording');
-            micBtn.innerHTML = '🎙️ 語音輸入';
-            if (autoSubmit && clinicalInput.value.trim() !== '') {
-                analyzeBtn.click(); 
-            }
+            recognition.onerror = (e) => { stopShortRec(); };
+            recognition.onend = () => { if(isShortRecording) stopShortRec(); };
         }
 
         micBtn.addEventListener('click', () => {
             if (!recognition) return showToast('❌ 瀏覽器不支援語音，請用 Chrome/Edge');
-            if (isRecording) { stopRec(true); } 
-            else {
+            
+            // 💡 智慧切換：若長段錄音正在進行，自動結算切換！
+            if (isLongRecording) {
+                stopLongRecAndUpload();
+                showToast('🔄 已自動結算長段錄音，切換至短句模式');
+            }
+            
+            if (isShortRecording) { 
+                stopShortRec(); 
+            } else {
                 micBtn.innerHTML = '⏳ 啟動中...'; 
                 try { recognition.start(); } 
-                catch(err) { stopRec(false); }
+                catch(err) { stopShortRec(); }
             }
         });
 
+        // ------------------------------------------
+        // 引擎 B：長段錄音 (Groq Whisper API)
+        // ------------------------------------------
+        let mediaRecorder;
+        let audioChunks = [];
+
+        longAudioBtn.addEventListener('click', async () => {
+            // 💡 智慧切換：若短句錄音正在進行，自動停止切換！
+            if (isShortRecording) {
+                stopShortRec();
+                showToast('🔄 已自動停止短句錄音，切換至長段模式');
+            }
+
+            if (!isLongRecording) {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
+
+                    mediaRecorder.ondataavailable = e => {
+                        if (e.data.size > 0) audioChunks.push(e.data);
+                    };
+
+                    mediaRecorder.onstop = () => {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        processLongAudioUpload(audioBlob);
+                        stream.getTracks().forEach(track => track.stop());
+                    };
+
+                    mediaRecorder.start();
+                    isLongRecording = true;
+                    
+                    longAudioBtn.innerHTML = '⏹️ 停止並上傳';
+                    longAudioBtn.classList.add('recording'); 
+                    showToast('⏺️ 開始長段收音...');
+                    
+                } catch (err) {
+                    showToast('❌ 無法存取麥克風，請確認瀏覽器權限');
+                }
+            } else {
+                stopLongRecAndUpload();
+            }
+        });
+
+        function processLongAudioUpload(blob) {
+            loadingMask.style.display = 'flex';
+            loadingMask.innerHTML = '🎧 音檔上傳中，正在進行 Whisper 辨識...';
+
+            const reader = new FileReader();
+            reader.readAsDataURL(blob);
+            reader.onloadend = () => {
+                const base64Audio = reader.result.split(',')[1]; 
+                const mimeType = blob.type; 
+
+                fetch(GAS_WEB_APP_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        action: 'processWebAudio',
+                        token: getUserToken(),
+                        payload: base64Audio,
+                        mimeType: mimeType
+                    })
+                })
+                .then(response => response.text())
+                .then(result => {
+                    let finalText = result;
+                    try {
+                        const data = JSON.parse(result);
+                        if (data.error) throw new Error(data.error);
+                        finalText = data.text || result;
+                    } catch (error) {}
+                    
+                    clinicalInput.value = (clinicalInput.value ? clinicalInput.value + '\n\n' : '') + '[長段語音轉錄]：\n' + finalText;
+                    autoResize(clinicalInput);
+                    showToast('✅ 語音辨識完成，請確認內容後點擊送出分析');
+                })
+                .catch(error => showToast('❌ 語音辨識失敗，檔案可能過大或網路異常'))
+                .finally(() => {
+                    loadingMask.style.display = 'none';
+                    loadingMask.innerHTML = '⏳ 醫療大腦運算中，請稍候...';
+                    
+                    longAudioBtn.innerHTML = '⏺️ 長段錄音';
+                    longAudioBtn.disabled = false;
+                });
+            };
+        }
+
+        // ==========================================
+        // 📷 電腦端圖片與相簿辨識
+        // ==========================================
         pcCameraBtn.addEventListener('click', () => { cameraInput.click(); });
         pcGalleryBtn.addEventListener('click', () => { galleryInput.click(); });
 
@@ -503,19 +564,81 @@
         cameraInput.addEventListener('change', function(e) { handlePcImageFile(e.target.files[0], pcCameraBtn); });
         galleryInput.addEventListener('change', function(e) { handlePcImageFile(e.target.files[0], pcGalleryBtn); });
 
+        // ==========================================
+        // 📋 支援電腦端直接貼上截圖 (Ctrl + V)
+        // ==========================================
+        document.addEventListener('paste', function(e) {
+            const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].type.indexOf('image') !== 0) continue;
+                
+                const blob = items[i].getAsFile();
+                if (!blob) return;
+
+                showToast('📋 偵測到剪貼簿截圖，正在辨識...');
+                loadingMask.style.display = 'flex';
+                loadingMask.innerHTML = '🔍 正在辨識貼上的截圖...';
+
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const img = new Image();
+                    img.onload = function() {
+                        const canvas = document.createElement('canvas');
+                        const MAX_WIDTH = 800;
+                        let width = img.width, height = img.height;
+                        if (width > MAX_WIDTH) { height = Math.round((height * MAX_WIDTH) / width); width = MAX_WIDTH; }
+                        canvas.width = width; canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+                        const base64String = canvas.toDataURL('image/jpeg', 0.8);
+
+                        fetch(GAS_WEB_APP_URL, {
+                            method: 'POST',
+                            body: JSON.stringify({
+                                action: 'processImage',
+                                token: getUserToken(),
+                                payload: base64String
+                            })
+                        })
+                        .then(response => response.text())
+                        .then(result => {
+                            let finalText = result;
+                            try {
+                                const data = JSON.parse(result);
+                                if (data.error) throw new Error(data.error);
+                                finalText = data.text || result;
+                            } catch (error) {}
+                            
+                            clinicalInput.value = (clinicalInput.value ? clinicalInput.value + '\n\n' : '') + '[系統辨識截圖]：\n' + finalText;
+                            autoResize(clinicalInput);
+                            showToast('✅ 截圖辨識完成');
+                        })
+                        .catch(error => showToast('❌ 截圖辨識失敗'))
+                        .finally(() => {
+                            loadingMask.style.display = 'none';
+                            loadingMask.innerHTML = '⏳ 醫療大腦運算中，請稍候...';
+                        });
+                    };
+                    img.src = event.target.result;
+                };
+                reader.readAsDataURL(blob);
+                e.preventDefault();
+                break;
+            }
+        });
+
+        // 🔗 Micromedex 連結
         document.getElementById('micromedexBtn').addEventListener('click', () => {
             window.open('https://www.micromedexsolutions.com/micromedex2/librarian/PFActionId/evidencexpert.FindDrugInteractions?navitem=topInteractions&isToolPage=true#/drugInteractionSearch', '_blank');
         });
     </script>
     
-    <!-- 📱📱📱 手機配對與遙控器邏輯 (已修復變數衝突問題) 📱📱📱 -->
     <script>
         let syncInterval = null;
         let lastActiveTime = Date.now(); 
         let isPhoneConnected = false; 
         let currentRoomId = null; 
         
-        // 🎯 [修正點]：變數名稱從 urlParams 改為 mobileUrlParams，避免與上方 <head> 的變數打架崩潰！
         const mobileUrlParams = new URLSearchParams(window.location.search);
         const urlRoomId = mobileUrlParams.get('roomId');
 
@@ -601,7 +724,6 @@
             remoteCameraBtn.addEventListener('click', () => { remoteCameraInput.click(); });
             remoteGalleryBtn.addEventListener('click', () => { remoteGalleryInput.click(); });
 
-            // 🎯 [修正點]：將變數名稱改為 MobileSpeechRecognition，避免與上方變數打架
             const MobileSpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             let remoteRecognition = null;
             let isRemoteRecording = false;
