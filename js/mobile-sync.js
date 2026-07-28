@@ -96,13 +96,16 @@ if (urlRoomId) {
     remoteMicBtn.addEventListener('click', () => SharedShortAudio.toggle(remoteMicBtn, remoteInput));
     remoteLongAudioBtn.addEventListener('click', () => SharedLongAudio.toggle(remoteLongAudioBtn, remoteInput, true));
 
-    window.sendToPc = function() {
+        window.sendToPc = function(autoAnalyze = false) {
         const text = remoteInput.value.trim();
         if (!text) return alert('⚠️ 內容為空');
         const btn = document.getElementById('remoteSendBtn');
         btn.innerText = '傳送中...';
         
-        fetch(GAS_WEB_APP_URL, { method: 'POST', body: JSON.stringify({ action: 'syncSend', token: getUserToken(), roomId: urlRoomId, payload: text }) })
+        // 🎯 偷塞隱藏標記，告訴電腦收到後直接啟動分析
+        const payloadText = autoAnalyze === true ? `[AUTO_ANALYZE]${text}` : text;
+        
+        fetch(GAS_WEB_APP_URL, { method: 'POST', body: JSON.stringify({ action: 'syncSend', token: getUserToken(), roomId: urlRoomId, payload: payloadText }) })
         .then(() => {
             remoteInput.value = ''; 
             btn.innerText = '🚀 將文字傳送到電腦';
@@ -111,6 +114,7 @@ if (urlRoomId) {
             setTimeout(() => status.style.display = 'none', 3000);
         });
     };
+
 
     window.disconnectFromPhone = function() {
         fetch(GAS_WEB_APP_URL, { method: 'POST', body: JSON.stringify({ action: 'syncSend', token: getUserToken(), roomId: urlRoomId, payload: '__DISCONNECT__' }) })
@@ -157,13 +161,25 @@ else {
                         showToast('📱 手機已主動斷開');
                         stopSync(true); 
                     }
-                    else {
-                        lastActiveTime = Date.now(); 
-                        const inputEl = document.getElementById('clinicalInput');
-                        inputEl.value = (inputEl.value ? inputEl.value + '\n' : '') + data.text;
-                        autoResize(inputEl);
-                        showToast('📥 已接收手機傳送的內容');
-                    }
+                        window.sendToPc = function(autoAnalyze = false) {
+        const text = remoteInput.value.trim();
+        if (!text) return alert('⚠️ 內容為空');
+        const btn = document.getElementById('remoteSendBtn');
+        btn.innerText = '傳送中...';
+        
+        // 🎯 偷塞隱藏標記，告訴電腦收到後直接啟動分析
+        const payloadText = autoAnalyze === true ? `[AUTO_ANALYZE]${text}` : text;
+        
+        fetch(GAS_WEB_APP_URL, { method: 'POST', body: JSON.stringify({ action: 'syncSend', token: getUserToken(), roomId: urlRoomId, payload: payloadText }) })
+        .then(() => {
+            remoteInput.value = ''; 
+            btn.innerText = '🚀 將文字傳送到電腦';
+            const status = document.getElementById('remoteStatus');
+            status.style.display = 'block';
+            setTimeout(() => status.style.display = 'none', 3000);
+        });
+    };
+
                 }
             }).catch(e => {});
 
