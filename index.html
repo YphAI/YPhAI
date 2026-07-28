@@ -530,49 +530,6 @@
             };
         }
 
-        function processLongAudioUpload(blob) {
-            loadingMask.style.display = 'flex';
-            loadingMask.innerHTML = '🎧 音檔上傳中，正在進行 Whisper 辨識...';
-
-            const reader = new FileReader();
-            reader.readAsDataURL(blob);
-            reader.onloadend = () => {
-                const base64Audio = reader.result.split(',')[1]; 
-                const mimeType = blob.type; 
-
-                fetch(GAS_WEB_APP_URL, {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        action: 'processWebAudio',
-                        token: getUserToken(),
-                        payload: base64Audio,
-                        mimeType: mimeType
-                    })
-                })
-                .then(response => response.text())
-                .then(result => {
-                    let finalText = result;
-                    try {
-                        const data = JSON.parse(result);
-                        if (data.error) throw new Error(data.error);
-                        finalText = data.text || result;
-                    } catch (error) {}
-                    
-                    clinicalInput.value = (clinicalInput.value ? clinicalInput.value + '\n\n' : '') + '[長段語音轉錄]：\n' + finalText;
-                    autoResize(clinicalInput);
-                    showToast('✅ 語音辨識完成，請確認內容後點擊送出分析');
-                })
-                .catch(error => showToast('❌ 語音辨識失敗，檔案可能過大或網路異常'))
-                .finally(() => {
-                    loadingMask.style.display = 'none';
-                    loadingMask.innerHTML = '⏳ 醫療大腦運算中，請稍候...';
-                    
-                    longAudioBtn.innerHTML = '⏺️ 長段錄音';
-                    longAudioBtn.disabled = false;
-                });
-            };
-        }
-
         // ==========================================
         // 📷 電腦端圖片與相簿辨識
         // ==========================================
