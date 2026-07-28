@@ -838,7 +838,7 @@
                 currentRoomId = Math.random().toString(36).substring(2, 8).toUpperCase();
                 lastActiveTime = Date.now(); 
                 
-                const githubPageBaseUrl = 'https://minutessbbs.github.io/YuanPhQ/';
+                const githubPageBaseUrl = 'https://yphai.github.io/YPhAI/';
                 const syncUrl = `${githubPageBaseUrl}?roomId=${currentRoomId}&token=${getUserToken()}`;
                 
                 document.getElementById('qrImage').src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(syncUrl)}`;
