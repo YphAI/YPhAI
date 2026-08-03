@@ -21,7 +21,8 @@
             <p id="categoryText" style="font-weight:bold; color:#0f172a; margin: 4px 0 12px 0;"></p>
 
             <label style="font-size:0.85rem; color:#64748b;">📝 原始提問</label>
-            <textarea id="questionText" rows="2" readonly style="background:#f1f5f9; margin-bottom: 12px;"></textarea>
+            <!-- 移除 readonly，並改名提示文字讓藥師知道可以修改 -->
+            <textarea id="questionText" rows="2" style="margin-bottom: 12px;" placeholder="可在此微調提問內容..."></textarea>
 
             <label style="font-size:0.85rem; color:#64748b;">💡 回覆內容（可直接修改）</label>
             <textarea id="replyText" rows="8"></textarea>
@@ -72,21 +73,17 @@
                 questionText.value = data.record.question || '';
                 replyText.value = data.record.aiReply || '';
 
-                // 💡 自動調整高度（需確保 config.js 裡面有定義 autoResize，若無則用下方備用函數）
-                if (typeof autoResize === 'function') {
-                    autoResize(questionText);
-                    autoResize(replyText);
-                } else {
-                    // 備用自動長高機制
-                    [questionText, replyText].forEach(el => {
-                        el.style.height = 'auto';
-                        el.style.height = (el.scrollHeight + 10) + 'px';
-                        el.addEventListener('input', function() {
-                            this.style.height = 'auto';
-                            this.style.height = (this.scrollHeight + 10) + 'px';
-                        });
+                // 💡 載入完成瞬間，立刻自動撐開高度，不用等點擊
+                [questionText, replyText].forEach(el => {
+                    el.style.height = 'auto';
+                    el.style.height = (el.scrollHeight + 10) + 'px';
+                    
+                    // 綁定即時打字變高事件
+                    el.addEventListener('input', function() {
+                        this.style.height = 'auto';
+                        this.style.height = (this.scrollHeight + 10) + 'px';
                     });
-                }
+                });
 
                 loadingArea.style.display = 'none';
                 formArea.style.display = 'block';
