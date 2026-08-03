@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>微調內容</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+</head>
+<body style="padding: 16px;">
+
+    <div class="container" style="margin-top: 0;">
+        <div class="section-title"><span>✏️ 微調 AI 回覆內容</span></div>
+
+        <div id="loadingArea" style="text-align:center; padding: 30px 0; color:#64748b;">
+            ⏳ 載入中...
+        </div>
+
+        <div id="formArea" style="display:none;">
+            <label style="font-size:0.85rem; color:#64748b;">🏷️ 分類</label>
+            <p id="categoryText" style="font-weight:bold; color:#0f172a; margin: 4px 0 12px 0;"></p>
+
+            <label style="font-size:0.85rem; color:#64748b;">📝 原始提問</label>
+            <textarea id="questionText" rows="2" readonly style="background:#f1f5f9; margin-bottom: 12px;"></textarea>
+
+            <label style="font-size:0.85rem; color:#64748b;">💡 回覆內容（可直接修改）</label>
+            <textarea id="replyText" rows="8"></textarea>
+
+            <div style="display:flex; gap:8px; margin-top: 16px;">
+                <button id="submitBtn" class="btn-analyze" style="background:#10b981;">✅ 確認送出</button>
+                <button id="cancelBtn" class="btn-mic" style="background:#fee2e2; color:#b91c1c; border-color:#fca5a5;">取消</button>
+            </div>
+        </div>
+
+        <div id="errorArea" style="display:none; text-align:center; padding: 30px 0; color:#dc2626;"></div>
+    </div>
+
+    <div id="toast" class="toast">訊息提示</div>
+
+    <!-- 重用網頁版既有的 config.js，取得 GAS_WEB_APP_URL / showToast / autoResize -->
+    <script src="config.js"></script>
+    <script>
+        const liffUrlParams = new URLSearchParams(window.location.search);
+        const reviewId = liffUrlParams.get('reviewId');
+
+        const loadingArea = document.getElementById('loadingArea');
+        const formArea = document.getElementById('formArea');
+        const errorArea = document.getElementById('errorArea');
+        const categoryText = document.getElementById('categoryText');
+        const questionText = document.getElementById('questionText');
+        const replyText = document.getElementById('replyText');
+
+        function showError(msg) {
+            loadingArea.style.display = 'none';
+            formArea.style.display = 'none';
+            errorArea.style.display = 'block';
+            errorArea.textContent = '⚠️ ' + msg;
+        }
+
+        function initForm() {
+            if (!reviewId) return showError('缺少 reviewId 參數，請從 LINE 訊息重新點擊按鈕進入');
+
+            fetch(GAS_WEB_APP_URL, {
+                method: 'POST',
+                body: JSON.stringify({ action: 'getReviewRecord', reviewId: reviewId })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) return showError(data.error);
+
+                categoryText.textContent = data.record.category || '未分類';
+                questionText.value = data.record.question || '';
+                replyText.value = data.record.aiReply || '';
+
+                autoResize(questionText);
+                autoResize(replyText);
+
+                loadingArea.style.display = 'none';
+                formArea.style.display = 'block';
+            })
+            .catch(() => showError('無法連線到伺服器，請確認網路後重試'));
+        }
+
+        document.getElementById('submitBtn').addEventListener('click', () => {
+            const finalText = replyText.value.trim();
+            if (!finalText) return showToast('⚠️ 內容不可為空');
+
+            const btn = document.getElementById('submitBtn');
+            btn.disabled = true;
+            btn.innerText = '⏳ 送出中...';
+
+            fetch(GAS_WEB_APP_URL, {
+                method: 'POST',
+                body: JSON.stringify({
+                    action: 'saveReviewRecord',
+                    reviewId: reviewId,
+                    finalText: finalText,
+                    action: 'keep'
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('✅ 已儲存！視窗即將關閉');
+                    setTimeout(() => {
+                        if (window.liff && liff.isInClient()) liff.closeWindow();
+                        else window.close();
+                    }, 1200);
+                } else {
+                    showToast('❌ ' + (data.error || '儲存失敗'));
+                    btn.disabled = false;
+                    btn.innerText = '✅ 確認送出';
+                }
+            })
+            .catch(() => {
+                showToast('❌ 網路連線失敗');
+                btn.disabled = false;
+                btn.innerText = '✅ 確認送出';
+            });
+        });
+
+        document.getElementById('cancelBtn').addEventListener('click', () => {
+            if (window.liff && liff.isInClient()) liff.closeWindow();
+            else window.close();
+        });
+
+        // ⚠️⚠️⚠️ 請把下面這行換成你在 LINE Developers Console 建立的 LIFF ID ⚠️⚠️⚠️
+        const LIFF_ID = '請填入你的LIFF_ID';
+
+        if (window.liff) {
+            liff.init({ liffId: LIFF_ID })
+                .then(() => { initForm(); })
+                .catch((err) => {
+                    console.warn('LIFF init failed, fallback to normal web mode:', err);
+                    initForm();
+                });
+        } else {
+            initForm();
+        }
+    </script>
+</body>
+</html>
