@@ -3,6 +3,49 @@
 
 const selectedTags = new Set();
 
+// 🆕 記住最近一次分析的「原始」AI 內容，供留存/忽略時比對是否被藥師修改過
+let lastAiResult = null; // { question, category, originalProblem, originalReply }
+const reviewActions = document.getElementById('reviewActions');
+const keepRecordBtn = document.getElementById('keepRecordBtn');
+const discardRecordBtn = document.getElementById('discardRecordBtn');
+
+function saveRecord(actionType) {
+    if (!lastAiResult) return showToast('⚠️ 尚無可留存的分析結果');
+
+    const finalCombined = `【問題敘述】\n${problemOutput.value}\n\n【回覆內容】\n${replyOutput.value}`;
+    const originalCombined = `【問題敘述】\n${lastAiResult.originalProblem}\n\n【回覆內容】\n${lastAiResult.originalReply}`;
+
+    fetch(GAS_WEB_APP_URL, {
+        method: 'POST',
+        body: JSON.stringify({
+            action: 'saveRecord',
+            token: getUserToken(),
+            staffName: localStorage.getItem('yuan_auth_name') || '',
+            payload: {
+                question: lastAiResult.question,
+                category: lastAiResult.category,
+                aiReply: originalCombined,
+                finalText: finalCombined,
+                action: actionType // 'keep' 或 'discard'
+            }
+        })
+    })
+    .then(res => res.json())
+    .then(res => {
+        if (res.success) {
+            showToast(actionType === 'keep' ? '💾 已留存紀錄' : '🗑️ 已忽略此筆');
+            lastAiResult = null;
+            reviewActions.style.display = 'none';
+        } else {
+            showToast('❌ ' + (res.error || '儲存失敗'));
+        }
+    })
+    .catch(() => showToast('❌ 網路連線失敗'));
+}
+
+keepRecordBtn.addEventListener('click', () => saveRecord('keep'));
+discardRecordBtn.addEventListener('click', () => saveRecord('discard'));
+
 window.onload = () => {
     fetch(GAS_WEB_APP_URL + '?action=getInitialData')
         .then(response => response.json())
@@ -101,6 +144,15 @@ analyzeBtn.addEventListener('click', () => {
                 autoResize(problemOutput);
                 autoResize(replyOutput);
                 showToast('✅ 分析完成');
+
+                // 🆕 記住這次的原始內容，並顯示留存/忽略按鈕
+                lastAiResult = {
+                    question: payloadText,
+                    category: data.category || '未分類',
+                    originalProblem: problemOutput.value,
+                    originalReply: replyOutput.value
+                };
+                reviewActions.style.display = 'flex';
             }
         } catch (e) {
             showToast('❌ 資料解析失敗');
