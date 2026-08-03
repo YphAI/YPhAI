@@ -22,6 +22,7 @@ function saveRecord(actionType) {
             token: getUserToken(),
             staffName: localStorage.getItem('yuan_auth_name') || '',
             payload: {
+                reviewId: lastAiResult.reviewId, // 👈 告訴後端要處理哪一筆紀錄
                 question: lastAiResult.question,
                 category: lastAiResult.category,
                 aiReply: originalCombined,
@@ -107,12 +108,17 @@ analyzeBtn.addEventListener('click', () => {
     analyzeBtn.disabled = true;
     analyzeBtn.innerHTML = '⏳ 處理中...';
 
+    // 💡 1. 從網址列抓取剛登入時的藥師名稱
+    const urlParams = new URLSearchParams(window.location.search);
+    const currentStaffName = urlParams.get('name') || '';
+
     fetch(GAS_WEB_APP_URL, {
         method: 'POST',
         body: JSON.stringify({
             action: 'callGemini',
             token: getUserToken(),
-            payload: payloadText
+            payload: payloadText,
+            staffName: currentStaffName // 👈 2. 把藥師名字一起傳過去預設存檔
         })
     })
     .then(response => response.text())
@@ -145,8 +151,9 @@ analyzeBtn.addEventListener('click', () => {
                 autoResize(replyOutput);
                 showToast('✅ 分析完成');
 
-                // 🆕 記住這次的原始內容，並顯示留存/忽略按鈕
+                // 🆕 記住這次的原始內容與 ID，並顯示留存/忽略按鈕
                 lastAiResult = {
+                    reviewId: data.reviewId, // 👈 記住後端剛剛產生的這張「號碼牌」
                     question: payloadText,
                     category: data.category || '未分類',
                     originalProblem: problemOutput.value,
