@@ -72,14 +72,33 @@
                 questionText.value = data.record.question || '';
                 replyText.value = data.record.aiReply || '';
 
-                autoResize(questionText);
-                autoResize(replyText);
+                // 💡 自動調整高度（需確保 config.js 裡面有定義 autoResize，若無則用下方備用函數）
+                if (typeof autoResize === 'function') {
+                    autoResize(questionText);
+                    autoResize(replyText);
+                } else {
+                    // 備用自動長高機制
+                    [questionText, replyText].forEach(el => {
+                        el.style.height = 'auto';
+                        el.style.height = (el.scrollHeight + 10) + 'px';
+                        el.addEventListener('input', function() {
+                            this.style.height = 'auto';
+                            this.style.height = (this.scrollHeight + 10) + 'px';
+                        });
+                    });
+                }
 
                 loadingArea.style.display = 'none';
                 formArea.style.display = 'block';
             })
             .catch(() => showError('無法連線到伺服器，請確認網路後重試'));
         }
+
+        // 讓回覆內容框在打字時也會即時自動長高
+        replyText.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight + 10) + 'px';
+        });
 
         document.getElementById('submitBtn').addEventListener('click', () => {
             const finalText = replyText.value.trim();
