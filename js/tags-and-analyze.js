@@ -42,13 +42,15 @@ function saveRecord(actionType) {
         if (res.success) {
             if (actionType === 'discard') {
                 showToast('🗑️ 已略過並從紀錄中刪除');
+                lastAiResult = null;
+                reviewActions.style.display = 'none'; // 刪除時才隱藏按鈕
             } else if (isModified) {
                 showToast('💾 已儲存您的修改內容！');
+                // 💡 故意不將 reviewActions.style.display 設為 'none'，按鈕保留供二次修改！
             } else {
                 showToast('💾 紀錄已確認留存');
+                // 💡 同樣保留按鈕
             }
-            lastAiResult = null;
-            reviewActions.style.display = 'none';
         } else {
             showToast('❌ ' + (res.error || '儲存失敗'));
         }
