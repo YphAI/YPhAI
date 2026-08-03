@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <!-- ⚠️ 登入驗證檢查，必須最先執行、不可加 defer/async，確保未登入時立刻跳轉 -->
-    <script src="js/auth-guard.js"></script>
+    <script src="auth-guard.js"></script>
 
     <title>醫療輔助系統</title>
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
@@ -67,7 +67,7 @@
                     <label>問題敘述</label>
                     <button onclick="copyContent('problemOutput', this)" class="btn-copy">📋 複製問題</button>
                 </div>
-                <textarea id="problemOutput" rows="1" readonly placeholder="AI 分析後的問題將顯示於此..." autocomplete="off"></textarea>
+                <textarea id="problemOutput" rows="1" placeholder="AI 分析後的問題將顯示於此..." autocomplete="off"></textarea>
             </div>
 
             <div>
@@ -75,7 +75,12 @@
                     <label>回覆內容</label>
                     <button onclick="copyContent('replyOutput', this)" class="btn-copy">📋 複製回覆</button>
                 </div>
-                <textarea id="replyOutput" rows="1" readonly placeholder="AI 分析後的回覆將顯示於此..." autocomplete="off"></textarea>
+                <textarea id="replyOutput" rows="1" placeholder="AI 分析後的回覆將顯示於此..." autocomplete="off"></textarea>
+            </div>
+
+            <div id="reviewActions" style="display:none; gap:8px;">
+                <button id="keepRecordBtn" class="btn-analyze" style="background:#10b981;">💾 留存紀錄</button>
+                <button id="discardRecordBtn" class="btn-mic" style="background:#fee2e2; color:#b91c1c; border-color:#fca5a5;">❌ 忽略</button>
             </div>
         </div>
     </div>
@@ -99,11 +104,11 @@
         5. image-upload.js
         6. mobile-sync.js    — 手機配對，且會在手機端整個換掉 <body>，放最後
     -->
-    <script src="js/config.js"></script>
-    <script src="js/tags-and-analyze.js"></script>
-    <script src="js/speech-short.js"></script>
-    <script src="js/audio-long.js"></script>
-    <script src="js/image-upload.js"></script>
-    <script src="js/mobile-sync.js"></script>
+    <script src="config.js"></script>
+    <script src="tags-and-analyze.js"></script>
+    <script src="speech-short.js"></script>
+    <script src="audio-long.js"></script>
+    <script src="image-upload.js"></script>
+    <script src="mobile-sync.js"></script>
 </body>
 </html>
