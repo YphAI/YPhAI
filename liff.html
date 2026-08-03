@@ -73,17 +73,23 @@
                 questionText.value = data.record.question || '';
                 replyText.value = data.record.aiReply || '';
 
-                // 💡 載入完成瞬間，立刻自動撐開高度，不用等點擊
-                [questionText, replyText].forEach(el => {
-                    el.style.height = 'auto';
-                    el.style.height = (el.scrollHeight + 10) + 'px';
-                    
-                    // 綁定即時打字變高事件
-                    el.addEventListener('input', function() {
-                        this.style.height = 'auto';
-                        this.style.height = (this.scrollHeight + 10) + 'px';
+                // 💡 1. 必須先讓畫面顯示，瀏覽器才能計算出文字框的真實高度！
+                loadingArea.style.display = 'none';
+                formArea.style.display = 'block';
+
+                // 💡 2. 延遲 10 毫秒，等畫面畫出來後，瞬間撐開高度
+                setTimeout(() => {
+                    [questionText, replyText].forEach(el => {
+                        el.style.height = 'auto';
+                        el.style.height = (el.scrollHeight + 2) + 'px';
+                        
+                        // 綁定即時打字變高事件
+                        el.addEventListener('input', function() {
+                            this.style.height = 'auto';
+                            this.style.height = (this.scrollHeight + 2) + 'px';
+                        });
                     });
-                });
+                }, 10);
 
                 loadingArea.style.display = 'none';
                 formArea.style.display = 'block';
