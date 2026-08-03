@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>微調內容</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="css/style.css">
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 </head>
 <body style="padding: 16px;">
@@ -38,7 +38,7 @@
     <div id="toast" class="toast">訊息提示</div>
 
     <!-- 重用網頁版既有的 config.js，取得 GAS_WEB_APP_URL / showToast / autoResize -->
-    <script src="config.js"></script>
+    <script src="js/config.js"></script>
     <script>
         const liffUrlParams = new URLSearchParams(window.location.search);
         const reviewId = liffUrlParams.get('reviewId');
