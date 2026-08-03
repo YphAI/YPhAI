@@ -12,13 +12,14 @@ const discardRecordBtn = document.getElementById('discardRecordBtn');
 function saveRecord(actionType) {
     if (!lastAiResult) return showToast('⚠️ 尚無可留存的分析結果');
 
-    const finalCombined = problemOutput.value.trim() + '\n\n' + replyOutput.value.trim();
-    const originalCombined = lastAiResult.originalProblem + '\n\n' + lastAiResult.originalReply;
+    // 💡 1. 分別抓取畫面上的「最新提問」與「最新回覆」
+    const currentProblem = problemOutput.value.trim();
+    const currentReply = replyOutput.value.trim();
 
-    // 💡 判斷藥師是否有修改過內容
-    const isModified = finalCombined !== originalCombined;
+    // 💡 2. 判斷是否有任一欄位被修改過
+    const isModified = (currentProblem !== lastAiResult.originalProblem) || (currentReply !== lastAiResult.originalReply);
     
-    // 如果點擊「留存」，且有修改過內容，我們用 'update' 動作把新文字覆蓋上去；沒修改過就直接保持原樣
+    // 如果點擊「留存」且有修改過內容，執行 'update'
     const currentAction = (actionType === 'keep' && isModified) ? 'update' : actionType;
 
     fetch(GAS_WEB_APP_URL, {
@@ -28,12 +29,10 @@ function saveRecord(actionType) {
             token: getUserToken(),
             staffName: localStorage.getItem('yuan_auth_name') || '',
             payload: {
-                reviewId: lastAiResult.reviewId, // 帶上該筆資料的號碼牌
-                question: lastAiResult.question,
-                category: lastAiResult.category,
-                aiReply: originalCombined,
-                finalText: finalCombined,
-                action: currentAction // 傳遞 'keep'、'update' 或 'discard'
+                reviewId: lastAiResult.reviewId, 
+                questionText: currentProblem, // 👈 獨立傳送提問 (會寫入 E 欄)
+                finalText: currentReply,      // 👈 獨立傳送回覆 (會寫入 F 欄)
+                action: currentAction 
             }
         })
     })
@@ -46,10 +45,11 @@ function saveRecord(actionType) {
                 reviewActions.style.display = 'none'; // 刪除時才隱藏按鈕
             } else if (isModified) {
                 showToast('💾 已儲存您的修改內容！');
-                // 💡 故意不將 reviewActions.style.display 設為 'none'，按鈕保留供二次修改！
+                // 更新基準值，防止重複按鈕被當作再次修改
+                lastAiResult.originalProblem = currentProblem;
+                lastAiResult.originalReply = currentReply;
             } else {
                 showToast('💾 紀錄已確認留存');
-                // 💡 同樣保留按鈕
             }
         } else {
             showToast('❌ ' + (res.error || '儲存失敗'));
