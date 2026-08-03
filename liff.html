@@ -95,7 +95,7 @@
                     action: 'saveReviewRecord',
                     reviewId: reviewId,
                     finalText: finalText,
-                    action: 'keep'
+                    statusAction: 'keep' // ✅ 改成不會衝突的名稱，或者直接刪掉這行
                 })
             })
             .then(res => res.json())
