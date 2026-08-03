@@ -118,7 +118,8 @@ analyzeBtn.addEventListener('click', () => {
             action: 'callGemini',
             token: getUserToken(),
             payload: payloadText,
-            staffName: currentStaffName // 👈 2. 把藥師名字一起傳過去預設存檔
+            // 👇 改用 localStorage 抓名字，網頁怎麼重整都不會掉！
+            staffName: localStorage.getItem('yuan_auth_name') || '未知名稱' 
         })
     })
     .then(response => response.text())
