@@ -12,18 +12,14 @@ const discardRecordBtn = document.getElementById('discardRecordBtn');
 function saveRecord(actionType) {
     if (!lastAiResult) return showToast('⚠️ 尚無可留存的分析結果');
 
-    // 💡 狀況 1：如果點擊「留存」
-    if (actionType === 'keep') {
-        // 因為結果產出時已經自動存檔了，這裡只需要顯示提示並收起按鈕即可
-        showToast('💾 紀錄已確認留存');
-        lastAiResult = null;
-        reviewActions.style.display = 'none';
-        return;
-    }
+    const finalCombined = problemOutput.value.trim() + '\n\n' + replyOutput.value.trim();
+    const originalCombined = lastAiResult.originalProblem + '\n\n' + lastAiResult.originalReply;
 
-    // 💡 狀況 2：如果點擊「不留存 / 略過」，才呼叫後端把該筆 ReviewID 刪除
-    const finalCombined = `【問題敘述】\n${problemOutput.value}\n\n【回覆內容】\n${replyOutput.value}`;
-    const originalCombined = `【問題敘述】\n${lastAiResult.originalProblem}\n\n【回覆內容】\n${lastAiResult.originalReply}`;
+    // 💡 判斷藥師是否有修改過內容
+    const isModified = finalCombined !== originalCombined;
+    
+    // 如果點擊「留存」，且有修改過內容，我們用 'update' 動作把新文字覆蓋上去；沒修改過就直接保持原樣
+    const currentAction = (actionType === 'keep' && isModified) ? 'update' : actionType;
 
     fetch(GAS_WEB_APP_URL, {
         method: 'POST',
@@ -32,23 +28,29 @@ function saveRecord(actionType) {
             token: getUserToken(),
             staffName: localStorage.getItem('yuan_auth_name') || '',
             payload: {
-                reviewId: lastAiResult.reviewId, // 👈 帶上號碼牌，告訴後端刪除這一筆
+                reviewId: lastAiResult.reviewId, // 帶上該筆資料的號碼牌
                 question: lastAiResult.question,
                 category: lastAiResult.category,
                 aiReply: originalCombined,
                 finalText: finalCombined,
-                action: 'discard' // 強制執行刪除
+                action: currentAction // 傳遞 'keep'、'update' 或 'discard'
             }
         })
     })
     .then(res => res.json())
     .then(res => {
         if (res.success) {
-            showToast('🗑️ 已略過並從紀錄中刪除');
+            if (actionType === 'discard') {
+                showToast('🗑️ 已略過並從紀錄中刪除');
+            } else if (isModified) {
+                showToast('💾 已儲存您的修改內容！');
+            } else {
+                showToast('💾 紀錄已確認留存');
+            }
             lastAiResult = null;
             reviewActions.style.display = 'none';
         } else {
-            showToast('❌ ' + (res.error || '操作失敗'));
+            showToast('❌ ' + (res.error || '儲存失敗'));
         }
     })
     .catch(() => showToast('❌ 網路連線失敗'));
